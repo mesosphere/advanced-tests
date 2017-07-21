@@ -1,0 +1,6 @@
+requests==2.14.1
+git+https://github.com/mesosphere/dcos-test-utils.git@924d84d8b79f39bf6a1cdd8043b0e65fe9171eec
+git+https://github.com/dcos/dcos-launch.git@33df8040c0c60addd1ae2ba605f1d7225e719ebc
+pytest
+retrying
+pyyaml

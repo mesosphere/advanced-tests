@@ -434,7 +434,6 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     'TEST_UPGRADE_INSTALLER_URL' not in os.environ,
     reason='TEST_UPGRADE_INSTALLER_URL must be set in env to upgrade a cluster')
 class TestUpgrade:
-    @pytest.mark.xfail
     def test_marathon_tasks_survive(self, upgraded_dcos, setup_workload):
         test_app_ids, test_pod_ids, tasks_start, _ = setup_workload
         app_tasks_end = {app_id: sorted(app_task_ids(upgraded_dcos, app_id)) for app_id in test_app_ids}
@@ -464,7 +463,6 @@ class TestUpgrade:
         task_state_end = get_master_task_state(upgraded_dcos, tasks_start[test_app_ids[0]][0])
         assert is_contained(task_state_start, task_state_end), '{}\n\n{}'.format(task_state_start, task_state_end)
 
-    @pytest.mark.xfail
     def test_app_dns_survive(self, upgraded_dcos, dns_app):
         marathon_framework_id = upgraded_dcos.marathon.get('/v2/info').json()['frameworkId']
         dns_app_task = upgraded_dcos.marathon.get('/v2/apps' + dns_app['id'] + '/tasks').json()['tasks'][0]

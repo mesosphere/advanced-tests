@@ -224,7 +224,6 @@ def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, s
         'masters': [m.public_ip for m in onprem_cluster.masters],
         'slaves': [m.public_ip for m in onprem_cluster.private_agents],
         'public_slaves': [m.public_ip for m in onprem_cluster.public_agents],
-        'default_os_user': 'root',
         'auth_user': dcos_api.DcosUser(helpers.CI_CREDENTIALS),
         'exhibitor_admin_password': launcher.config['dcos_config'].get('exhibitor_admin_password')}
 
@@ -235,8 +234,6 @@ def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, s
             os.getenv('DCOS_LOGIN_PW', 'testpassword'))
         if ssl_enabled:
             args['dcos_url'] = args['dcos_url'].replace('http', 'https')
-        if security_mode == 'strict':
-            args['default_os_user'] = 'nobody'
     else:
         api_class = dcos_api.DcosApiSession
 

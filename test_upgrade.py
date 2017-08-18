@@ -26,8 +26,7 @@ import uuid
 
 import pkg_resources
 
-import dcos_test_utils.dcos_api_session
-from dcos_test_utils import enterprise, helpers, upgrade
+from dcos_test_utils import dcos_api, enterprise, helpers, upgrade
 import pytest
 import retrying
 import yaml
@@ -225,8 +224,7 @@ def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, s
         'masters': [m.public_ip for m in onprem_cluster.masters],
         'slaves': [m.public_ip for m in onprem_cluster.private_agents],
         'public_slaves': [m.public_ip for m in onprem_cluster.public_agents],
-        'default_os_user': 'root',
-        'auth_user': dcos_test_utils.dcos_api_session.DcosUser(helpers.CI_CREDENTIALS),
+        'auth_user': dcos_api.DcosUser(helpers.CI_CREDENTIALS),
         'exhibitor_admin_password': launcher.config['dcos_config'].get('exhibitor_admin_password')}
 
     if is_enterprise:
@@ -236,10 +234,8 @@ def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, s
             os.getenv('DCOS_LOGIN_PW', 'testpassword'))
         if ssl_enabled:
             args['dcos_url'] = args['dcos_url'].replace('http', 'https')
-        if security_mode == 'strict':
-            args['default_os_user'] = 'nobody'
     else:
-        api_class = dcos_test_utils.dcos_api_session.DcosApiSession
+        api_class = dcos_api.DcosApiSession
 
     return api_class(**args)
 
@@ -248,15 +244,15 @@ def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, s
     wait_fixed=(1 * 1000),
     stop_max_delay=(120 * 1000),
     retry_on_result=lambda x: not x)
-def wait_for_dns(dcos_api, hostname):
+def wait_for_dns(dcos_api_session, hostname):
     """Return True if Mesos-DNS has at least one entry for hostname."""
-    hosts = dcos_api.get('/mesos_dns/v1/hosts/' + hostname).json()
+    hosts = dcos_api_session.get('/mesos_dns/v1/hosts/' + hostname).json()
     return any(h['host'] != '' and h['ip'] != '' for h in hosts)
 
 
-def get_master_task_state(dcos_api, task_id):
+def get_master_task_state(dcos_api_session, task_id):
     """Returns the JSON blob associated with the task from /master/state."""
-    response = dcos_api.get('/mesos/master/state')
+    response = dcos_api_session.get('/mesos/master/state')
     response.raise_for_status()
     master_state = response.json()
 
@@ -266,19 +262,19 @@ def get_master_task_state(dcos_api, task_id):
                 return task
 
 
-def app_task_ids(dcos_api, app_id):
+def app_task_ids(dcos_api_session, app_id):
     """Return a list of Mesos task IDs for app_id's running tasks."""
     assert app_id.startswith('/')
-    response = dcos_api.marathon.get('/v2/apps' + app_id + '/tasks')
+    response = dcos_api_session.marathon.get('/v2/apps' + app_id + '/tasks')
     response.raise_for_status()
     tasks = response.json()['tasks']
     return [task['id'] for task in tasks]
 
 
-def pod_task_ids(dcos_api, pod_id):
+def pod_task_ids(dcos_api_session, pod_id):
     """Return a list of Mesos task IDs for a given pod_id running tasks."""
     assert pod_id.startswith('/')
-    response = dcos_api.marathon.get('/v2/pods' + pod_id + '::status')
+    response = dcos_api_session.marathon.get('/v2/pods' + pod_id + '::status')
     response.raise_for_status()
     return [container['containerId']
             for instance in response.json()['instances']
@@ -451,7 +447,7 @@ class TestUpgrade:
             if type(subset) is not type(superset):
                 return False
             elif isinstance(subset, dict):
-                return all(key in superset.keys() and is_contained(value, superset[key]) \
+                return all(key in superset.keys() and is_contained(value, superset[key])
                            for key, value in subset.items())
             elif isinstance(subset, list):
                 return all(any(is_contained(sub_item, super_item) for super_item in superset) for sub_item in subset)

@@ -6,9 +6,9 @@ import pytest
 
 import dcos_launch.config
 import dcos_launch.util
-from dcos_test_utils import logging
+from dcos_test_utils import logger
 
-logging.setup_logging('DEBUG')
+logger.setup('DEBUG')
 
 
 @pytest.fixture(scope='session')

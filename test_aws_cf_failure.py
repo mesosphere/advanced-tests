@@ -6,15 +6,13 @@ import pytest
 import retrying
 import yaml
 
-import dcos_test_utils.helpers
-import dcos_test_utils.dcos_api_session
-import dcos_test_utils.marathon
+from dcos_test_utils import dcos_api, helpers, marathon, ssh_client
 
 log = logging.getLogger(__name__)
 
 
 @retrying.retry(wait_fixed=10 * 1000)
-def wait_for_pong(tunnel: dcos_test_utils.ssh_client.Tunnelled, url):
+def wait_for_pong(tunnel: ssh_client.Tunnelled, url):
     """continually GETs /ping expecting JSON pong:true return
     Does not stop on exception as connection error may be expected
     """
@@ -30,13 +28,13 @@ def dcos_api_session(launcher):
     if launcher.config['provider'] != 'aws':
         pytest.skip('This test can only run on AWS')
     description = launcher.describe()
-    session = dcos_test_utils.dcos_api_session.DcosApiSession(
+    session = dcos_api.DcosApiSession(
         'http://' + description['masters'][0]['public_ip'],
         [m['public_ip'] for m in description['masters']],
         [m['private_ip'] for m in description['private_agents']],
         [m['private_ip'] for m in description['public_agents']],
         'root',
-        dcos_test_utils.dcos_api_session.DcosUser(dcos_test_utils.helpers.CI_CREDENTIALS))
+        dcos_api.DcosUser(helpers.CI_CREDENTIALS))
     session.wait_for_dcos()
     return session
 
@@ -44,10 +42,10 @@ def dcos_api_session(launcher):
 @pytest.fixture
 def vip_apps(dcos_api_session):
     vip1 = '6.6.6.1:6661'
-    test_app1, _ = dcos_test_utils.marathon.get_test_app(vip=vip1)
+    test_app1, _ = marathon.get_test_app(vip=vip1)
     name = 'myvipapp'
     port = 5432
-    test_app2, _ = dcos_test_utils.marathon.get_test_app(vip='{}:{}'.format(name, port))
+    test_app2, _ = marathon.get_test_app(vip='{}:{}'.format(name, port))
     vip2 = '{}.marathon.l4lb.thisdcos.directory:{}'.format(name, port)
     with dcos_api_session.marathon.deploy_and_cleanup(test_app1):
         with dcos_api_session.marathon.deploy_and_cleanup(test_app2):
@@ -67,23 +65,23 @@ def test_agent_failure(launcher, dcos_api_session, vip_apps):
     # Accessing AWS Resource objects will trigger a client describe call.
     # As such, any method that touches AWS APIs must be wrapped to avoid
     # CI collapse when rate limits are inevitably reached
-    @dcos_test_utils.helpers.retry_boto_rate_limits
+    @helpers.retry_boto_rate_limits
     def get_running_instances(instance_iter):
         return [i for i in instance_iter if i.state['Name'] == 'running']
 
-    @dcos_test_utils.helpers.retry_boto_rate_limits
+    @helpers.retry_boto_rate_limits
     def get_instance_ids(instance_iter):
         return [i.instance_id for i in instance_iter]
 
-    @dcos_test_utils.helpers.retry_boto_rate_limits
+    @helpers.retry_boto_rate_limits
     def get_private_ips(instance_iter):
         return sorted([i.private_ip_address for i in get_running_instances(instance_iter)])
 
-    ssh_client = launcher.get_ssh_client()
+    ssh = launcher.get_ssh_client()
 
     # make sure the app works before starting
     log.info('Waiting for VIPs to be routable...')
-    with ssh_client.tunnel(dcos_api_session.masters[0]) as tunnel:
+    with ssh.tunnel(dcos_api_session.masters[0]) as tunnel:
         wait_for_pong(tunnel, vip_apps[0][1])
         wait_for_pong(tunnel, vip_apps[1][1])
 
@@ -96,7 +94,7 @@ def test_agent_failure(launcher, dcos_api_session, vip_apps):
     launcher.boto_wrapper.client('ec2').terminate_instances(InstanceIds=agent_ids)
     waiter = launcher.boto_wrapper.client('ec2').get_waiter('instance_terminated')
     log.info('Waiting for instances to be terminated')
-    dcos_test_utils.helpers.retry_boto_rate_limits(waiter.wait)(InstanceIds=agent_ids)
+    helpers.retry_boto_rate_limits(waiter.wait)(InstanceIds=agent_ids)
 
     # Tell mesos the machines are "down" and not coming up so things get rescheduled.
     log.info('Posting to mesos that agents are down')
@@ -138,6 +136,6 @@ def test_agent_failure(launcher, dcos_api_session, vip_apps):
     # finally verify that the app is again running somewhere with its VIPs
     # Give marathon five minutes to deploy both the apps
     log.info('Waiting for VIPs to be routable...')
-    with ssh_client.tunnel(dcos_api_session.masters[0]) as tunnel:
+    with ssh.tunnel(dcos_api_session.masters[0]) as tunnel:
         wait_for_pong(tunnel, vip_apps[0][1])
         wait_for_pong(tunnel, vip_apps[1][1])

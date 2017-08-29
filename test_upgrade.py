@@ -474,3 +474,14 @@ class TestUpgrade:
             'Hostname failed to resolve at these times:\n{failures}'.format(
                 hostname=dns_app['env']['RESOLVE_NAME'],
                 failures='\n'.join(dns_failure_times))
+
+    def test_oauth_enabled(self, upgraded_dcos):
+        # Verifies configuration change when upgrading for Open DC/OS.
+        # oauth_enabled is set to 'true' before the upgrade and should be set to 
+        # 'false' after the upgrade to disable authentication.
+        response = upgraded_dcos.get('dcos-metadata/ui-config.json')
+        response.raise_for_status()
+        oauth = response.json()["uiConfiguration"]["plugins"]["oauth"]["enabled"]
+        assert oauth == False
+
+

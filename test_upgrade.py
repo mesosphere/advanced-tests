@@ -492,4 +492,3 @@ class TestUpgrade:
             assert oauth == False
         else:
             pytest.skip("Test not applicable.")
-    

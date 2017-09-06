@@ -377,6 +377,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     """ This test is intended to test upgrades between versions so use
     the same config as the original launch
     """
+    bootstrap_host = onprem_cluster.bootstrap_host.public_ip
     bootstrap_home = onprem_cluster.ssh_client.get_home_dir(bootstrap_host)
     genconf_dir = os.path.join(bootstrap_home, 'genconf')
     with onprem_cluster.ssh_client.tunnel(bootstrap_host) as tunnel:
@@ -478,10 +479,11 @@ class TestUpgrade:
                 failures='\n'.join(dns_failure_times))
 
     def test_oauth_enabled(self, launcher, upgraded_dcos, upgrade_config):
-        # Verifies configuration change when upgrading for Open DC/OS.
-        # Only runs test if the right conditions are met: oauth_enabled 
-        # is set to 'true' before upgrade and set to 'false' after upgrade. 
-        
+        """ Verifies configuration change when upgrading for Open DC/OS.
+        Only runs test if the right conditions are met: oauth_enabled 
+        is set to 'true' before upgrade and set to 'false' after upgrade. 
+        """
+
         launcher_oauth = launcher.config['dcos_config'].get('oauth_enabled')
         upgrade_oauth = upgrade_config.get('oauth_enabled')                   
 

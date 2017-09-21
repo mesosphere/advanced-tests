@@ -322,6 +322,8 @@ def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app
     test_app_ids = [app['id'] for app in test_apps]
     app_tasks_start = {app_id: sorted(app_task_ids(dcos_api_session, app_id)) for app_id in test_app_ids}
     tasks_start = {**app_tasks_start}
+    test_pods = list()
+    test_pod_ids = list()
     if use_pods:
         dcos_api_session.marathon.deploy_pod(docker_pod)
         dcos_api_session.marathon.wait_for_deployments_complete()

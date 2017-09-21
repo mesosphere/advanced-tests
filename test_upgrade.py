@@ -291,8 +291,13 @@ def parse_dns_log(dns_log_content):
     return dns_log
 
 
+@pytest.fixture
+def use_pods():
+    return os.getenv('TEST_USE_PODS', 'true') == 'true'
+
+
 @pytest.fixture(scope='session')
-def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod):
+def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
     if dcos_api_session.default_url.scheme == 'https':
         dcos_api_session.set_ca_cert()
     dcos_api_session.wait_for_dcos()
@@ -313,27 +318,25 @@ def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app
     dcos_api_session.marathon.deploy_app(dns_app, check_health=False)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    dcos_api_session.marathon.deploy_pod(docker_pod)
-    dcos_api_session.marathon.wait_for_deployments_complete()
-
     test_apps = [healthcheck_app, dns_app, viplisten_app, viptalk_app]
     test_app_ids = [app['id'] for app in test_apps]
-
-    test_pods = [docker_pod]
-    test_pod_ids = [pod['id'] for pod in test_pods]
-
     app_tasks_start = {app_id: sorted(app_task_ids(dcos_api_session, app_id)) for app_id in test_app_ids}
-    pod_tasks_start = {pod_id: sorted(pod_task_ids(dcos_api_session, pod_id)) for pod_id in test_pod_ids}
+    tasks_start = {**app_tasks_start}
+    if use_pods:
+        dcos_api_session.marathon.deploy_pod(docker_pod)
+        dcos_api_session.marathon.wait_for_deployments_complete()
+        test_pods = [docker_pod]
+        test_pod_ids = [pod['id'] for pod in test_pods]
+        pod_tasks_start = {pod_id: sorted(pod_task_ids(dcos_api_session, pod_id)) for pod_id in test_pod_ids}
+        tasks_start = {**app_tasks_start, **pod_tasks_start}
+        for pod in test_pods:
+            assert pod['scaling']['instances'] * len(pod['containers']) == len(tasks_start[pod['id']])
 
     # Marathon apps and pods cannot share IDs, so we merge task lists here.
-    tasks_start = {**app_tasks_start, **pod_tasks_start}
     log.debug('Test app tasks at start:\n' + pprint.pformat(tasks_start))
 
     for app in test_apps:
         assert app['instances'] == len(tasks_start[app['id']])
-
-    for pod in test_pods:
-        assert pod['scaling']['instances'] * len(pod['containers']) == len(tasks_start[pod['id']])
 
     # Save the master's state of the task to compare with
     # the master's view after the upgrade.
@@ -434,8 +437,10 @@ class TestUpgrade:
     def test_marathon_tasks_survive(self, upgraded_dcos, setup_workload):
         test_app_ids, test_pod_ids, tasks_start, _ = setup_workload
         app_tasks_end = {app_id: sorted(app_task_ids(upgraded_dcos, app_id)) for app_id in test_app_ids}
-        pod_tasks_end = {pod_id: sorted(pod_task_ids(upgraded_dcos, pod_id)) for pod_id in test_pod_ids}
-        tasks_end = {**app_tasks_end, **pod_tasks_end}
+        tasks_end = {**app_tasks_end}
+        if use_pods:
+            pod_tasks_end = {pod_id: sorted(pod_task_ids(upgraded_dcos, pod_id)) for pod_id in test_pod_ids}
+            tasks_end = {**app_tasks_end, **pod_tasks_end}
         log.debug('Test app tasks at end:\n' + pprint.pformat(tasks_end))
         assert tasks_start == tasks_end
 

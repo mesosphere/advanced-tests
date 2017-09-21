@@ -291,7 +291,7 @@ def parse_dns_log(dns_log_content):
     return dns_log
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def use_pods():
     return os.getenv('TEST_USE_PODS', 'true') == 'true'
 

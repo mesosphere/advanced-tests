@@ -159,6 +159,29 @@ def test_installer_cli(onprem_cluster, onprem_launcher):
         'exhibitor_storage_backend': 'static'}
     test_config.update(onprem_launcher.config['dcos_config'])
 
+    if os.environ.get('TEST_CUSTOM_CHECKS') == 'true':
+        test_check_script_filename = 'test_check_script'
+        check_bins_dir = os.path.join(genconf_dir, 'check_bins')
+
+        assert 'custom_checks' not in test_config
+        test_config['custom_checks'] = {
+            'node_checks': {
+                'checks': {
+                    'test_check': {
+                        'description': 'Test check, does nothing',
+                        'cmd': [test_check_script_filename],
+                        'timeout': '3s',
+                    },
+                },
+                'poststart': ['test_check'],
+            }
+        }
+
+        log.info('Transferring custom check executables')
+        cli_installer.ssh_command(['mkdir', check_bins_dir])
+        cli_installer.copy_to_host(
+            helpers.session_tempfile(b'#!/bin/sh\nexit 0\n'), os.path.join(check_bins_dir, test_check_script_filename))
+
     # explicitly transfer the files to be in the designated paths on the host
     log.info('Transfering config.yaml')
     cli_installer.copy_to_host(

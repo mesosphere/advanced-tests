@@ -347,12 +347,8 @@ def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app
     task_state_start = get_master_task_state(dcos_api_session, tasks_start[test_app_ids[0]][0])
     return test_app_ids, test_pod_ids, tasks_start, task_state_start
 
-
 @pytest.fixture(scope='session')
-def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is_enterprise):
-    """ This test is intended to test upgrades between versions so use
-    the same config as the original launch
-    """
+def upgrade_config(onprem_cluster, setup_workload, launcher):
     # Check for previous installation artifacts first
     bootstrap_host = onprem_cluster.bootstrap_host.public_ip
     upgrade.reset_bootstrap_host(onprem_cluster.ssh_client, bootstrap_host)
@@ -379,7 +375,14 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     if 'ip_detect_public_contents' not in upgrade_config:
         upgrade_config['ip_detect_public_contents'] = yaml.dump(pkg_resources.resource_string(
             'dcos_launch', 'ip-detect/aws_public.sh').decode())
+    return upgrade_config
 
+@pytest.fixture(scope='session')
+def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is_enterprise, upgrade_config):
+    """ This test is intended to test upgrades between versions so use
+    the same config as the original launch
+    """
+    bootstrap_host = onprem_cluster.bootstrap_host.public_ip
     bootstrap_home = onprem_cluster.ssh_client.get_home_dir(bootstrap_host)
     genconf_dir = os.path.join(bootstrap_home, 'genconf')
     with onprem_cluster.ssh_client.tunnel(bootstrap_host) as tunnel:
@@ -405,7 +408,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
         onprem_cluster,
         launcher,
         is_enterprise,
-        upgrade_config_overrides.get('security'))
+        upgrade_config.get('security'))
 
     # use the Auth session from the previous API session
     upgrade_session.session.auth = dcos_api_session.session.auth
@@ -481,3 +484,20 @@ class TestUpgrade:
             'Hostname failed to resolve at these times:\n{failures}'.format(
                 hostname=dns_app['env']['RESOLVE_NAME'],
                 failures='\n'.join(dns_failure_times))
+
+    def test_oauth_enabled(self, launcher, upgraded_dcos, upgrade_config):
+        """ Verifies configuration change when upgrading for Open DC/OS.
+        Only runs test if the right conditions are met: oauth_enabled 
+        is set to 'true' before upgrade and set to 'false' after upgrade. 
+        """
+
+        launcher_oauth = launcher.config['dcos_config'].get('oauth_enabled')
+        upgrade_oauth = upgrade_config.get('oauth_enabled')                   
+
+        if (launcher_oauth) and (not upgrade_oauth): 
+            response = upgraded_dcos.get('/dcos-metadata/ui-config.json')
+            response.raise_for_status()
+            oauth = response.json()["uiConfiguration"]["plugins"]["oauth"]["enabled"]
+            assert oauth == False
+        else:
+            pytest.skip("Test not applicable.")

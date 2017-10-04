@@ -26,10 +26,12 @@ import uuid
 
 import pkg_resources
 
-from dcos_test_utils import dcos_api, enterprise, helpers, upgrade
+from dcos_test_utils import dcos_api, enterprise, helpers
 import pytest
 import retrying
 import yaml
+
+import upgrade
 
 log = logging.getLogger(__name__)
 

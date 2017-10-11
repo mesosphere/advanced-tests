@@ -16,6 +16,10 @@ import dcos_launch
 from dcos_launch import config
 from dcos_test_utils import helpers, onprem, ssh_client
 
+from rc_support import init_runtime_config
+
+init_runtime_config("installer-cli")
+
 log = logging.getLogger(__name__)
 
 

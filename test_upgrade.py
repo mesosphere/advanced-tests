@@ -32,8 +32,11 @@ import retrying
 import yaml
 
 import upgrade
+from rc_support import init_runtime_config
 
 log = logging.getLogger(__name__)
+
+init_runtime_config("upgrade")
 
 TEST_APP_NAME_FMT = 'upgrade-{}'
 

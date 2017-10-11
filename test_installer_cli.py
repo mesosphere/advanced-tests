@@ -18,9 +18,12 @@ from dcos_test_utils import helpers, onprem, ssh_client
 
 from rc_support import init_runtime_config
 
-init_runtime_config("installer-cli")
-
 log = logging.getLogger(__name__)
+
+
+@pytest.fixture(scope='session', autouse=True)
+def init_rc():
+    init_runtime_config("installer-cli")
 
 
 class DcosCliInstaller():

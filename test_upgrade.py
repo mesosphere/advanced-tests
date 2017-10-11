@@ -36,9 +36,13 @@ from rc_support import init_runtime_config
 
 log = logging.getLogger(__name__)
 
-init_runtime_config("upgrade")
 
 TEST_APP_NAME_FMT = 'upgrade-{}'
+
+
+@pytest.fixture(scope='session', autouse=True)
+def init_rc():
+    init_runtime_config("upgrade")
 
 
 @pytest.fixture(scope='session')

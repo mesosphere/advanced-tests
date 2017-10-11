@@ -1,6 +1,6 @@
 requests
 git+https://github.com/dcos/dcos-test-utils.git@f7c1446b86349ac07693d279a4db0d5d6238a1c3
-git+https://github.com/dcos/dcos-launch.git@a345fa544d375bb046479f78e4c3bb4e340f822d
+git+https://github.com/dcos/dcos-launch.git@101d7873e99b141b8b488899d231c435499bcf19
 pytest
 retrying
 pyyaml

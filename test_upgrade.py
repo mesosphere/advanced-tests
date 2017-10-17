@@ -402,6 +402,14 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
             pkg_resources.resource_filename('dcos_launch', 'ip-detect/aws.sh'),
             os.path.join(bootstrap_home, 'genconf/ip-detect'))
 
+    # do the actual upgrade
+    upgrade.upgrade_dcos(
+        dcos_api_session,
+        onprem_cluster,
+        dcos_api_session.get_version(),
+        os.environ['TEST_UPGRADE_INSTALLER_URL'],
+        os.environ['TEST_UPGRADE_USE_CHECKS'] == 'true')
+
     # API object may need to be updated
     upgrade_session = make_dcos_api_session(
         onprem_cluster,
@@ -411,14 +419,6 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
     # use the Auth session from the previous API session
     upgrade_session.session.auth = dcos_api_session.session.auth
-
-    # do the actual upgrade
-    upgrade.upgrade_dcos(
-        upgrade_session,
-        onprem_cluster,
-        dcos_api_session.get_version(),
-        os.environ['TEST_UPGRADE_INSTALLER_URL'],
-        os.environ['TEST_UPGRADE_USE_CHECKS'] == 'true')
 
     # this can be set after the fact because the upgrade metrics snapshot
     # endpoint is polled with verify=False

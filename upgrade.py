@@ -14,17 +14,19 @@ log = logging.getLogger(__name__)
 @retrying.retry(
     wait_fixed=1000 * 10,
     retry_on_result=lambda result: result is False)
-def wait_for_mesos_metric(cluster, host, key):
+def wait_for_mesos_metric(cluster, host_public, key, bootstrap, host_private, ssh):
     """Return True when host's Mesos metric key is equal to value."""
-    if host in cluster.masters:
-        port = 5050
-    else:
-        port = 5051
     log.info('Polling metrics snapshot endpoint')
-    # A CA cert may be set during the upgrade, so do not verify just in case
-    response = cluster.get('/metrics/snapshot', host=host, port=port, verify=False)
-    return response.json().get(key) == 1
+    if host_public in cluster.masters:
+        port = "5050"
+    else:
+        port = "5051"
 
+    auth_str = cluster.auth_user.auth_header['Authorization']
+    curl_cmd = ['curl', '-H', 'Authorization:' + auth_str, " http://" + host_private + ":" + port + '/metrics/snapshot']
+    with ssh.tunnel(bootstrap) as t:
+        response = json.loads(t.command(curl_cmd).decode('utf-8'))
+    return response[key] == 1
 
 def reset_bootstrap_host(ssh: ssh_client.SshClient, bootstrap_host: str):
     with ssh.tunnel(bootstrap_host) as t:
@@ -98,9 +100,9 @@ def upgrade_dcos(
             bootstrap_home + '/genconf/serve/dcos_install.sh'])
         tunnel.command(['docker', 'restart', 'dcos-bootstrap-nginx'])
     # upgrading can finally start
-    master_list = [host.public_ip for host in onprem_cluster.masters]
-    private_agent_list = [host.public_ip for host in onprem_cluster.private_agents]
-    public_agent_list = [host.public_ip for host in onprem_cluster.public_agents]
+    master_list = onprem_cluster.masters
+    private_agent_list = onprem_cluster.private_agents
+    public_agent_list = onprem_cluster.public_agents
     upgrade_ordering = [
         # Upgrade masters in a random order.
         ('master', 'master', random.sample(master_list, len(master_list))),
@@ -108,14 +110,14 @@ def upgrade_dcos(
         ('slave_public', 'public agent', public_agent_list)]
     logging.info('\n'.join(
         ['Upgrade plan:'] +
-        ['{} ({})'.format(host, role_name) for _, role_name, hosts in upgrade_ordering for host in hosts]
+        ['{} ({})'.format(host.public_ip, role_name) for _, role_name, hosts in upgrade_ordering for host in hosts]
     ))
     for role, role_name, hosts in upgrade_ordering:
         log.info('Upgrading {} nodes: {}'.format(role_name, repr(hosts)))
         for host in hosts:
-            log.info('Upgrading {}: {}'.format(role_name, repr(host)))
+            log.info('Upgrading {}: {}'.format(role_name, repr(host.public_ip)))
             ssh_client.command(
-                host,
+                host.public_ip,
                 [
                     'curl',
                     '--silent',
@@ -128,15 +130,15 @@ def upgrade_dcos(
                     '--speed-limit', '100000',
                     '--speed-time', '60',
                     '--remote-name', upgrade_script_path])
-            log.info("Starting upgrade script on {host} ({role_name})...".format(host=host, role_name=role_name))
+            log.info("Starting upgrade script on {host} ({role_name})...".format(host=host.public_ip, role_name=role_name))
             if use_checks:
-                ssh_client.command(host, ['sudo', 'bash', 'dcos_node_upgrade.sh'], stdout=sys.stdout.buffer)
+                ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh'], stdout=sys.stdout.buffer)
             else:
                 # only installers version 1.10 and higher will support the --skip-checks command
                 if upgrade_version.startswith('1.1'):
-                    ssh_client.command(host, ['sudo', 'bash', 'dcos_node_upgrade.sh', '--skip-checks'])
+                    ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh', '--skip-checks'])
                 else:
-                    ssh_client.command(host, ['sudo', 'bash', 'dcos_node_upgrade.sh'])
+                    ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh'])
                 wait_metric = {
                     'master': 'registrar/log/recovered',
                     'slave': 'slave/registered',
@@ -144,9 +146,9 @@ def upgrade_dcos(
                 }[role]
                 log.info('Waiting for {} to rejoin the cluster...'.format(role_name))
                 try:
-                    wait_for_mesos_metric(dcos_api_session, host, wait_metric)
+                    wait_for_mesos_metric(dcos_api_session, host.public_ip, wait_metric, bootstrap_host, host.private_ip, onprem_cluster.ssh_client)
                 except retrying.RetryError as exc:
                     raise Exception(
                         'Timed out waiting for {} to rejoin the cluster after upgrade: {}'.
-                        format(role_name, repr(host))
+                        format(role_name, repr(host.public_ip))
                     ) from exc

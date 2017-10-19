@@ -9,13 +9,13 @@ Required:
   TEST_LAUNCH_CONFIG_PATH: path to a dcos-launch config for the cluster that will be upgraded.
       This cluster may or may not exist yet
   TEST_UPGRADE_INSTALLER_URL: The installer pulled from this URL will upgrade the aforementioned cluster.
-  TEST_UPGRADE_USE_CHECKS: if set to `true`, 3dt checks will be run to verify that a node upgrade was
-      successful
 Optional
   TEST_CREATE_CLUSTER: if set to `true`, a cluster will be created. Otherwise it will be assumed
       the provided launch config is a dcos-launch artifact
   TEST_UPGRADE_CONFIG_PATH: path to a YAML file for injecting parameters into the config to be
       used in generating the upgrade script
+  TEST_UPGRADE_USE_CHECKS: if set to `true`, 3dt checks will be run to verify that a node upgrade was
+      successful
 """
 import copy
 import logging

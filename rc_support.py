@@ -1,13 +1,17 @@
 import copy
+import logging
 
 from configparser import ConfigParser
 from typing import Dict
 
 import os
 
+log = logging.getLogger(__name__)
+
 
 def init_runtime_config(namespace: str):
-    os.environ = _gen_and_init_env(namespace, copy.copy(os.environ), os.getcwd())
+    new_env = _gen_and_init_env(namespace, copy.copy(os.environ), os.getcwd())
+    log.info('Setting env to: {}'.format(new_env))
 
 
 def _gen_and_init_env(namespace: str, env: Dict[str, str], config_dir: str) -> Dict[str, str]:
@@ -21,9 +25,11 @@ def _load_config(file_path: str) -> ConfigParser:
     cp = ConfigParser()
     cp.optionxform = lambda option: option
     try:
+        log.info('Attempting to load {}'.format(file_path))
         with open(file_path, 'r') as f:
             cp.read_file(f)
     except FileNotFoundError:
+        log.exception('Could not load {}'.format(file_path))
         # intentionally swallow this error, if the file is not defined that's okay we will just not load it
         pass
     return cp
@@ -44,7 +50,7 @@ def _generate_config(namespace: str, env: Dict[str, str], config: ConfigParser) 
         for k, v in values.items():
             if k not in env:
                 new_env[k] = v
-
+                log.info('Setting {} from .advancedtestsrc to {}'.format(k, v))
         return new_env
     else:
         return env

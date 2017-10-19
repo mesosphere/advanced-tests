@@ -37,6 +37,7 @@ def _merge_launch_config_with_env(launch_config_path: str) -> None:
     """
     installer_url = os.getenv("TEST_LAUNCH_CONFIG_INSTALLER_URL")
     if installer_url:
+        log.info('TEST_LAUNCH_CONFIG_INSTALLER_URL found: {}'.format(installer_url))
         initial_config = dcos_launch.config.load_config(launch_config_path)
         if 'installer_url' not in initial_config:
             initial_config['installer_url'] = installer_url

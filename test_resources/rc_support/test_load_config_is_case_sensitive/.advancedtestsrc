@@ -1,0 +1,7 @@
+[A]
+x=err_lower
+X=err_upper
+
+[a]
+x=1
+X=one

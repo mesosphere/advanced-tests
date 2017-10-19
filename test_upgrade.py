@@ -9,13 +9,13 @@ Required:
   TEST_LAUNCH_CONFIG_PATH: path to a dcos-launch config for the cluster that will be upgraded.
       This cluster may or may not exist yet
   TEST_UPGRADE_INSTALLER_URL: The installer pulled from this URL will upgrade the aforementioned cluster.
-  TEST_UPGRADE_USE_CHECKS: if set to `true`, 3dt checks will be run to verify that a node upgrade was
-      successful
 Optional
   TEST_CREATE_CLUSTER: if set to `true`, a cluster will be created. Otherwise it will be assumed
       the provided launch config is a dcos-launch artifact
   TEST_UPGRADE_CONFIG_PATH: path to a YAML file for injecting parameters into the config to be
       used in generating the upgrade script
+  TEST_UPGRADE_USE_CHECKS: if set to `true`, 3dt checks will be run to verify that a node upgrade was
+      successful
 """
 import copy
 import logging
@@ -32,10 +32,17 @@ import retrying
 import yaml
 
 import upgrade
+from rc_support import init_runtime_config
 
 log = logging.getLogger(__name__)
 
+
 TEST_APP_NAME_FMT = 'upgrade-{}'
+
+
+@pytest.fixture(scope='session', autouse=True)
+def init_rc():
+    init_runtime_config(os.getenv('TEST_UPGRADE_PRESETS', 'upgrade'))
 
 
 @pytest.fixture(scope='session')
@@ -430,9 +437,6 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     return upgrade_session
 
 
-@pytest.mark.skipif(
-    'TEST_UPGRADE_USE_CHECKS' not in os.environ,
-    reason='TEST_UPGRADE_USE_CHECKS must be set in env to upgrade a cluster')
 @pytest.mark.skipif(
     'TEST_UPGRADE_INSTALLER_URL' not in os.environ,
     reason='TEST_UPGRADE_INSTALLER_URL must be set in env to upgrade a cluster')

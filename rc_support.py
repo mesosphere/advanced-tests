@@ -36,6 +36,21 @@ def _load_config(file_path: str) -> ConfigParser:
     return cp
 
 
+def _normalize_namespace(namespace: str):
+    """ Reduces tag labels to major version only when running against upgrade
+    """
+    if not namespace.startswith('upgrade'):
+        return namespace
+    namespace_split = namespace.split('-')
+    if len(namespace_split) > 2:
+        tag = namespace_split[2]
+        tag_split = tag.split('.')
+        if len(tag_split) > 2:
+            new_tag = '.'.join(tag_split[:2])
+            namespace_split[2] = new_tag
+    return '-'.join(namespace_split)
+
+
 def _generate_config(namespace: str, env: Dict[str, str], config: ConfigParser) -> Dict[str, str]:
     """
     Generate a new enriched `env` with values defined in `config[namespace]` that do not already exist in `env`.
@@ -45,8 +60,9 @@ def _generate_config(namespace: str, env: Dict[str, str], config: ConfigParser) 
     :param config:    The config to read from
     :return:          The new `env` enriched with values from `config[namespace]`
     """
-    if namespace in config:
-        values = config[namespace]
+    new_namespace = _normalize_namespace(namespace)
+    if new_namespace in config:
+        values = config[new_namespace]
         new_env = env.copy()
         for k, v in values.items():
             if (k not in env) or (not env[k]):

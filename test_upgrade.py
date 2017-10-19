@@ -438,9 +438,6 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
 
 @pytest.mark.skipif(
-    'TEST_UPGRADE_USE_CHECKS' not in os.environ,
-    reason='TEST_UPGRADE_USE_CHECKS must be set in env to upgrade a cluster')
-@pytest.mark.skipif(
     'TEST_UPGRADE_INSTALLER_URL' not in os.environ,
     reason='TEST_UPGRADE_INSTALLER_URL must be set in env to upgrade a cluster')
 class TestUpgrade:

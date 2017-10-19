@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 def init_runtime_config(namespace: str):
     new_env = _gen_and_init_env(namespace, copy.copy(os.environ), os.getcwd())
     log.info('Setting env to: {}'.format(new_env))
+    os.environ = new_env
 
 
 def _gen_and_init_env(namespace: str, env: Dict[str, str], config_dir: str) -> Dict[str, str]:

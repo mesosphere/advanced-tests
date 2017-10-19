@@ -10,6 +10,7 @@ import dcos_launch.util
 import yaml
 from dcos_launch import util
 from dcos_test_utils import logger
+from rc_support import init_runtime_config
 
 logger.setup('DEBUG')
 
@@ -75,6 +76,7 @@ def launcher(create_cluster, cluster_info_path):
     # Use non-strict validation so that info JSONs with extra fields do not
     # raise errors on configuration validation
     launch_config_path = os.environ['TEST_LAUNCH_CONFIG_PATH']
+    init_runtime_config(os.getenv('TEST_UPGRADE_PRESETS', 'upgrade'))
     if create_cluster:
         _merge_launch_config_with_env(launch_config_path)
         launcher = dcos_launch.get_launcher(dcos_launch.config.get_validated_config(launch_config_path))

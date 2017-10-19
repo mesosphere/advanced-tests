@@ -27,12 +27,19 @@ def _write_yaml(y: dict, path: str) -> None:
 
 
 def _merge_launch_config_with_env(launch_config_path: str) -> None:
-    installer_url = os.getenv("TEST_LAUNCH_CONFIG_INSTALLER_URL", None)
-    if installer_url is not None:
+    """ This method will modify a file being used for launch by injecting in
+    an environment variable for the installer_url.
+
+    Test options change depending on the installer and most testing for
+    upgrades will be done from specific pinned versions, which is the latest
+    stable minor release for a given major release
+    """
+    installer_url = os.getenv("TEST_LAUNCH_CONFIG_INSTALLER_URL")
+    if installer_url:
         initial_config = dcos_launch.config.load_config(launch_config_path)
         if 'installer_url' not in initial_config:
             initial_config['installer_url'] = installer_url
-            _write_yaml(initial_config, installer_url)
+            _write_yaml(initial_config, launch_config_path)
 
 
 @pytest.fixture(scope='session')

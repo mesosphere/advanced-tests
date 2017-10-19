@@ -24,7 +24,6 @@ def _load_config(file_path: str) -> ConfigParser:
     except FileNotFoundError:
         # intentionally swallow this error, if the file is not defined that's okay we will just not load it
         pass
-    
     return cp
 
 

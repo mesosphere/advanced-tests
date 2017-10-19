@@ -42,7 +42,7 @@ TEST_APP_NAME_FMT = 'upgrade-{}'
 
 @pytest.fixture(scope='session', autouse=True)
 def init_rc():
-    init_runtime_config("upgrade")
+    init_runtime_config(os.getenv('TEST_UPGRADE_PRESETS', 'upgrade'))
 
 
 @pytest.fixture(scope='session')

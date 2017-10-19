@@ -16,6 +16,8 @@ Optional
       used in generating the upgrade script
   TEST_UPGRADE_USE_CHECKS: if set to `true`, 3dt checks will be run to verify that a node upgrade was
       successful
+  TEST_UPGRADE_USE_PODS: if set to `true`, test will launch a marathon pod in addition to the app
+      before the upgrade begins
 """
 import copy
 import logging
@@ -296,7 +298,7 @@ def parse_dns_log(dns_log_content):
 
 @pytest.fixture(scope='session')
 def use_pods():
-    return os.getenv('TEST_USE_PODS', 'true') == 'true'
+    return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
 
 @pytest.fixture(scope='session')

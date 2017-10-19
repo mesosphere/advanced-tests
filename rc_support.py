@@ -1,3 +1,5 @@
+import copy
+
 from configparser import ConfigParser
 from typing import Dict
 
@@ -5,7 +7,7 @@ import os
 
 
 def init_runtime_config(namespace: str):
-    os.environ = _gen_and_init_env(namespace, os.environ.copy, os.getcwd())
+    os.environ = _gen_and_init_env(namespace, copy.copy(os.environ), os.getcwd())
 
 
 def _gen_and_init_env(namespace: str, env: Dict[str, str], config_dir: str) -> Dict[str, str]:

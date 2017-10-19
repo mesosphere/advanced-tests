@@ -23,10 +23,14 @@ def wait_for_mesos_metric(cluster, host_public, key, bootstrap, host_private, ss
         port = "5051"
 
     auth_str = cluster.auth_user.auth_header['Authorization']
-    curl_cmd = ['curl', '-H', 'Authorization:' + auth_str, " http://" + host_private + ":" + port + '/metrics/snapshot']
+    curl_cmd = [
+        'curl', '--insecure',
+        '-H', 'Authorization:' + auth_str,
+        cluster.default_url.scheme + '://' + host_private + ":" + port + '/metrics/snapshot']
     with ssh.tunnel(bootstrap) as t:
         response = json.loads(t.command(curl_cmd).decode('utf-8'))
     return response[key] == 1
+
 
 def reset_bootstrap_host(ssh: ssh_client.SshClient, bootstrap_host: str):
     with ssh.tunnel(bootstrap_host) as t:
@@ -130,7 +134,8 @@ def upgrade_dcos(
                     '--speed-limit', '100000',
                     '--speed-time', '60',
                     '--remote-name', upgrade_script_path])
-            log.info("Starting upgrade script on {host} ({role_name})...".format(host=host.public_ip, role_name=role_name))
+            log.info("Starting upgrade script on {host} ({role_name})...".format(
+                host=host.public_ip, role_name=role_name))
             if use_checks:
                 ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh'], stdout=sys.stdout.buffer)
             else:
@@ -146,7 +151,9 @@ def upgrade_dcos(
                 }[role]
                 log.info('Waiting for {} to rejoin the cluster...'.format(role_name))
                 try:
-                    wait_for_mesos_metric(dcos_api_session, host.public_ip, wait_metric, bootstrap_host, host.private_ip, onprem_cluster.ssh_client)
+                    wait_for_mesos_metric(
+                        dcos_api_session, host.public_ip, wait_metric,
+                        bootstrap_host, host.private_ip, onprem_cluster.ssh_client)
                 except retrying.RetryError as exc:
                     raise Exception(
                         'Timed out waiting for {} to rejoin the cluster after upgrade: {}'.

@@ -48,7 +48,7 @@ def _generate_config(namespace: str, env: Dict[str, str], config: ConfigParser) 
         values = config[namespace]
         new_env = env.copy()
         for k, v in values.items():
-            if (k not in env) or (not k):
+            if (k not in env) or (not v):
                 new_env[k] = v
                 log.info('Setting {} from .advancedtestsrc to {}'.format(k, v))
         return new_env

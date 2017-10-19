@@ -35,13 +35,13 @@ TEST_UPGRADE_ENTERPRISE=true
 TEST_LAUNCH_CONFIG_INSTALLER_URL=https://downloads.mesosphere.io/dcos-enterprise/stable/1.10.0/dcos_generate_config.ee.sh
 
 [upgrade-from-master-open]
-TEST_UPGRADE_USE_CHECK=true
+TEST_UPGRADE_USE_CHECKS=true
 TEST_UPGRADE_USE_PODS=true
 TEST_UPGRADE_ENTERPRISE=false
 TEST_LAUNCH_CONFIG_INSTALLER_URL=https://downloads.dcos.io/dcos/stable/dcos_generate_config.sh
 
 [upgrade-from-master-ee]
-TEST_UPGRADE_USE_CHECK=true
+TEST_UPGRADE_USE_CHECKS=true
 TEST_UPGRADE_USE_PODS=true
 TEST_UPGRADE_ENTERPRISE=true
 TEST_LAUNCH_CONFIG_INSTALLER_URL=https://downloads.mesosphere.io/dcos-enterprise/stable/dcos_generate_config.ee.sh

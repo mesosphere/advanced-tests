@@ -12,13 +12,13 @@ TEST_LAUNCH_CONFIG_INSTALLER_URL=https://downloads.mesosphere.io/dcos-enterprise
 
 [upgrade-to-1.9-open]
 TEST_UPGRADE_USE_CHECKS=false
-TEST_UPGRADE_USE_PODS=true
+TEST_UPGRADE_USE_PODS=false
 TEST_UPGRADE_ENTERPRISE=false
 TEST_UPGRADE_INSTALLER_URL=https://downloads.dcos.io/dcos/stable/1.9.5/dcos_generate_config.sh
 
 [upgrade-to-1.9-ee]
 TEST_UPGRADE_USE_CHECKS=false
-TEST_UPGRADE_USE_PODS=true
+TEST_UPGRADE_USE_PODS=false
 TEST_UPGRADE_ENTERPRISE=true
 TEST_UPGRADE_INSTALLER_URL=https://downloads.mesosphere.io/dcos-enterprise/stable/1.9.5/dcos_generate_config.ee.sh
 

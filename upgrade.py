@@ -86,12 +86,17 @@ def upgrade_dcos(
 
     with ssh_client.tunnel(bootstrap_host) as tunnel:
         log.info('Generating node upgrade script')
-        upgrade_script_path = tunnel.command(
-            ['bash', installer_path, '--generate-node-upgrade-script ' + starting_version]
-        ).decode('utf-8').splitlines()[-1].split("Node upgrade script URL: ", 1)[1]
-
+        tunnel.command(['bash', installer_path, '--help'])
         upgrade_version = json.loads(tunnel.command(
             ['bash', installer_path, '--version']).decode('utf-8'))['version']
+        use_node_upgrade_script = not upgrade_version.startswith('1.8')
+        if use_node_upgrade_script:
+            upgrade_script_url = tunnel.command(
+                ['bash', installer_path, '--generate-node-upgrade-script ' + starting_version]
+            ).decode('utf-8').splitlines()[-1].split("Node upgrade script URL: ", 1)[1]
+        else:
+            tunnel.command(['bash', installer_path, '--genconf ' + starting_version])
+            upgrade_script_url = 'http://' + bootstrap_host + '/dcos_install.sh'
 
         log.info('Editing node upgrade script...')
         # Remove docker (and associated journald) restart from the install
@@ -133,17 +138,31 @@ def upgrade_dcos(
                     '--retry', '20',
                     '--speed-limit', '100000',
                     '--speed-time', '60',
-                    '--remote-name', upgrade_script_path])
+                    '--remote-name', upgrade_script_url])
             log.info("Starting upgrade script on {host} ({role_name})...".format(
                 host=host.public_ip, role_name=role_name))
             if use_checks:
+                # use checks is implicit in this command. The upgrade is
+                # completely contained to this step
                 ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh'], stdout=sys.stdout.buffer)
             else:
-                # only installers version 1.10 and higher will support the --skip-checks command
-                if upgrade_version.startswith('1.1'):
-                    ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh', '--skip-checks'])
+                # If not using the dcoc-checks service, polling endpoints is
+                # required in order to pace the upgrade to persist state.
+                if use_node_upgrade_script:
+                    if upgrade_version.startswith('1.1'):
+                        # checks are implicit and must be disabled in 1.10 and above
+                        ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh', '--skip-checks'])
+                    else:
+                        # older installer have no concepts of checks
+                        ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh'])
                 else:
-                    ssh_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh'])
+                    # no upgrade script to invoke, do upgrade manually
+                    ssh_client.command(
+                        host.public_ip, ['sudo', '-i', '/opt/mesosphere/bin/pkgpanda', 'uninstall'])
+                    ssh_client.command(
+                        host.public_ip, ['sudo', 'rm', '-rf', '/opt/mesosphere', '/etc/mesosphere'])
+                    ssh_client.command(
+                        host.public_ip, ['sudo', 'bash', 'dcos_install.sh', '-d', role])
                 wait_metric = {
                     'master': 'registrar/log/recovered',
                     'slave': 'slave/registered',

@@ -433,9 +433,6 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     return upgrade_session
 
 
-@pytest.mark.skipif(
-    'TEST_UPGRADE_INSTALLER_URL' not in os.environ,
-    reason='TEST_UPGRADE_INSTALLER_URL must be set in env to upgrade a cluster')
 class TestUpgrade:
     @pytest.mark.xfail
     def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload):

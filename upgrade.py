@@ -95,7 +95,7 @@ def upgrade_dcos(
                 ['bash', installer_path, '--generate-node-upgrade-script ' + starting_version]
             ).decode('utf-8').splitlines()[-1].split("Node upgrade script URL: ", 1)[1]
         else:
-            tunnel.command(['bash', installer_path, '--genconf ' + starting_version])
+            tunnel.command(['bash', installer_path, '--genconf'])
             upgrade_script_url = 'http://' + bootstrap_host + '/dcos_install.sh'
 
         log.info('Editing node upgrade script...')

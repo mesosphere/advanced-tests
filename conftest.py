@@ -80,7 +80,7 @@ def launcher(create_cluster, cluster_info_path):
     init_runtime_config(os.getenv('TEST_UPGRADE_PRESETS', 'upgrade'))
     if create_cluster:
         _merge_launch_config_with_env(launch_config_path)
-        launcher = dcos_launch.get_launcher(dcos_launch.config.get_validated_config(launch_config_path))
+        launcher = dcos_launch.get_launcher(dcos_launch.config.get_validated_config_from_path(launch_config_path))
         info = launcher.create()
         with open(cluster_info_path, 'w') as f:
             json.dump(info, f)

@@ -84,7 +84,7 @@ class DcosCliInstaller():
 def onprem_launcher():
     """ Provides the OnpremLauncher to create a cluster for installation.
     """
-    launcher = dcos_launch.get_launcher(config.get_validated_config(
+    launcher = dcos_launch.get_launcher(config.get_validated_config_from_path(
         os.environ['TEST_LAUNCH_CONFIG_PATH']))
     if launcher.config['provider'] != 'onprem':
         pytest.skip('Must use a launch config with `provider: onprem` to run this test')

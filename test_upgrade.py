@@ -126,10 +126,10 @@ def healthcheck_app():
                 "protocol": "HTTP",
                 "path": "/",
                 "portIndex": 0,
-                "gracePeriodSeconds": 5,
-                "intervalSeconds": 1,
-                "timeoutSeconds": 5,
-                "maxConsecutiveFailures": 1
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
             }
         ],
     }

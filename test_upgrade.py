@@ -378,9 +378,6 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
         'agent_list': [h.private_ip for h in onprem_cluster.private_agents],
         'public_agent_list': [h.private_ip for h in onprem_cluster.public_agents]})
     upgrade_config.update(upgrade_config_overrides)
-    # if it was a ZK-backed install, make sure ZK is still running
-    if upgrade_config.get('exhibitor_storage_backend') == 'zookeeper':
-        upgrade_config['exhibitor_zk_hosts'] = onprem_cluster.start_bootstrap_zk()
     # if IP detect public was not present, go ahead an inject it
     if 'ip_detect_public_contents' not in upgrade_config:
         upgrade_config['ip_detect_public_contents'] = yaml.dump(pkg_resources.resource_string(
@@ -411,7 +408,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
         dcos_api_session,
         onprem_cluster,
         bootstrap_ssh_client,
-        launcher.get_ssh_client(user='bootstrap_ssh_user'),
+        launcher.get_ssh_client(),
         dcos_api_session.get_version(),
         os.environ['TEST_UPGRADE_INSTALLER_URL'],
         os.environ['TEST_UPGRADE_USE_CHECKS'] == 'true')

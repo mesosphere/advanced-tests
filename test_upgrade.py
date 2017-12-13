@@ -360,7 +360,8 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     """
     # Check for previous installation artifacts first
     bootstrap_host = onprem_cluster.bootstrap_host.public_ip
-    upgrade.reset_bootstrap_host(onprem_cluster.ssh_client, bootstrap_host)
+    bootstrap_ssh_client = launcher.get_ssh_client(user='bootstrap_ssh_user')
+    upgrade.reset_bootstrap_host(bootstrap_ssh_client, bootstrap_host)
 
     upgrade_config_overrides = dict()
     if 'TEST_UPGRADE_CONFIG_PATH' in os.environ:
@@ -387,7 +388,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
     bootstrap_home = onprem_cluster.ssh_client.get_home_dir(bootstrap_host)
     genconf_dir = os.path.join(bootstrap_home, 'genconf')
-    with onprem_cluster.ssh_client.tunnel(bootstrap_host) as tunnel:
+    with bootstrap_ssh_client.tunnel(bootstrap_host) as tunnel:
         log.info('Setting up upgrade config on bootstrap host')
         tunnel.command(['mkdir', genconf_dir])
         # transfer the config file
@@ -396,7 +397,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
             os.path.join(bootstrap_home, 'genconf/config.yaml'))
         # FIXME: we dont need the ssh key when the upgrade isnt being orchestratd
         tunnel.copy_file(
-            helpers.session_tempfile(onprem_cluster.ssh_client.key.encode()),
+            helpers.session_tempfile(bootstrap_ssh_client.key.encode()),
             os.path.join(bootstrap_home, 'genconf/ssh_key'))
         tunnel.command(['chmod', '600', os.path.join(bootstrap_home, 'genconf/ssh_key')])
         # Move the ip-detect script to the expected default path
@@ -409,6 +410,8 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     upgrade.upgrade_dcos(
         dcos_api_session,
         onprem_cluster,
+        bootstrap_ssh_client,
+        launcher.get_ssh_client(user='bootstrap_ssh_user'),
         dcos_api_session.get_version(),
         os.environ['TEST_UPGRADE_INSTALLER_URL'],
         os.environ['TEST_UPGRADE_USE_CHECKS'] == 'true')

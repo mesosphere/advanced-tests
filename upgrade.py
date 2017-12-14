@@ -84,16 +84,16 @@ def upgrade_dcos(
     with bootstrap_client.tunnel(bootstrap_host) as tunnel:
         platforms_onprem.download_dcos_installer(tunnel, installer_path, installer_url)
         log.info('Generating node upgrade script')
-        tunnel.command(['bash', installer_path, '--help'])
+        tunnel.command(['sudo', 'bash', installer_path, '--help'])
         upgrade_version = json.loads(tunnel.command(
-            ['bash', installer_path, '--version']).decode('utf-8'))['version']
+            ['sudo', 'bash', installer_path, '--version']).decode('utf-8'))['version']
         use_node_upgrade_script = not upgrade_version.startswith('1.8')
         if use_node_upgrade_script:
             upgrade_script_url = tunnel.command(
-                ['bash', installer_path, '--generate-node-upgrade-script ' + starting_version]
+                ['sudo', 'bash', installer_path, '--generate-node-upgrade-script ' + starting_version]
             ).decode('utf-8').splitlines()[-1].split("Node upgrade script URL: ", 1)[1]
         else:
-            tunnel.command(['bash', installer_path, '--genconf'])
+            tunnel.command(['sudo', 'bash', installer_path, '--genconf'])
             upgrade_script_url = 'http://' + bootstrap_host + '/dcos_install.sh'
 
         log.info('Editing node upgrade script...')

@@ -80,9 +80,9 @@ def upgrade_dcos(
     # Fetch installer
     bootstrap_home = bootstrap_client.get_home_dir(bootstrap_host)
     installer_path = os.path.join(bootstrap_home, 'dcos_generate_config.sh')
-    onprem.download_dcos_installer(bootstrap_client, bootstrap_host, installer_path, installer_url)
 
     with bootstrap_client.tunnel(bootstrap_host) as tunnel:
+        platforms_onprem.download_dcos_installer(tunnel, installer_path, installer_url)
         log.info('Generating node upgrade script')
         tunnel.command(['bash', installer_path, '--help'])
         upgrade_version = json.loads(tunnel.command(

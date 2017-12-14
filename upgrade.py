@@ -15,21 +15,15 @@ log = logging.getLogger(__name__)
 @retrying.retry(
     wait_fixed=1000 * 10,
     retry_on_result=lambda result: result is False)
-def wait_for_mesos_metric(cluster, host_public, key, bootstrap, host_private, ssh):
+def wait_for_mesos_metric(api_session, port, key, ssh_tunnel):
     """Return True when host's Mesos metric key is equal to value."""
     log.info('Polling metrics snapshot endpoint')
-    if host_public in cluster.masters:
-        port = "5050"
-    else:
-        port = "5051"
-
-    auth_str = cluster.auth_user.auth_header['Authorization']
+    auth_str = api_session.auth_user.auth_header['Authorization']
     curl_cmd = [
         'curl', '--insecure',
         '-H', 'Authorization:' + auth_str,
-        cluster.default_url.scheme + '://' + host_private + ":" + port + '/metrics/snapshot']
-    with ssh.tunnel(bootstrap) as t:
-        response = json.loads(t.command(curl_cmd).decode('utf-8'))
+        api_session.default_url.scheme + '://' + "0.0.0.0:" + port + '/metrics/snapshot']
+    response = json.loads(ssh_tunnel.command(curl_cmd).decode('utf-8'))
     return response[key] == 1
 
 
@@ -129,9 +123,8 @@ def upgrade_dcos(
         log.info('Upgrading {} nodes: {}'.format(role_name, repr(hosts)))
         for host in hosts:
             log.info('Upgrading {}: {}'.format(role_name, repr(host.public_ip)))
-            node_client.command(
-                host.public_ip,
-                [
+            with node_client.tunnel(host.public_ip) as tunnel:
+                tunnel.command([
                     'curl',
                     '--silent',
                     '--verbose',
@@ -143,42 +136,38 @@ def upgrade_dcos(
                     '--speed-limit', '100000',
                     '--speed-time', '60',
                     '--remote-name', upgrade_script_url])
-            log.info("Starting upgrade script on {host} ({role_name})...".format(
-                host=host.public_ip, role_name=role_name))
-            if use_checks:
-                # use checks is implicit in this command. The upgrade is
-                # completely contained to this step
-                node_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh'], stdout=sys.stdout.buffer)
-            else:
-                # If not using the dcoc-checks service, polling endpoints is
-                # required in order to pace the upgrade to persist state.
-                if use_node_upgrade_script:
-                    if upgrade_version.startswith('1.1'):
-                        # checks are implicit and must be disabled in 1.10 and above
-                        node_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh', '--skip-checks'])
-                    else:
-                        # older installer have no concepts of checks
-                        node_client.command(host.public_ip, ['sudo', 'bash', 'dcos_node_upgrade.sh'])
+                log.info("Starting upgrade script on {host} ({role_name})...".format(
+                    host=host.public_ip, role_name=role_name))
+                if use_checks:
+                    # use checks is implicit in this command. The upgrade is
+                    # completely contained to this step
+                    tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh'], stdout=sys.stdout.buffer)
                 else:
-                    # no upgrade script to invoke, do upgrade manually
-                    node_client.command(
-                        host.public_ip, ['sudo', '-i', '/opt/mesosphere/bin/pkgpanda', 'uninstall'])
-                    node_client.command(
-                        host.public_ip, ['sudo', 'rm', '-rf', '/opt/mesosphere', '/etc/mesosphere'])
-                    node_client.command(
-                        host.public_ip, ['sudo', 'bash', 'dcos_install.sh', '-d', role])
-                wait_metric = {
-                    'master': 'registrar/log/recovered',
-                    'slave': 'slave/registered',
-                    'slave_public': 'slave/registered',
-                }[role]
-                log.info('Waiting for {} to rejoin the cluster...'.format(role_name))
-                try:
-                    wait_for_mesos_metric(
-                        dcos_api_session, host.public_ip, wait_metric,
-                        bootstrap_host, host.private_ip, ssh_client)
-                except retrying.RetryError as exc:
-                    raise Exception(
-                        'Timed out waiting for {} to rejoin the cluster after upgrade: {}'.
-                        format(role_name, repr(host.public_ip))
-                    ) from exc
+                    # If not using the dcoc-checks service, polling endpoints is
+                    # required in order to pace the upgrade to persist state.
+                    if use_node_upgrade_script:
+                        if upgrade_version.startswith('1.1'):
+                            # checks are implicit and must be disabled in 1.10 and above
+                            tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh', '--skip-checks'])
+                        else:
+                            # older installer have no concepts of checks
+                            tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh'])
+                    else:
+                        # no upgrade script to invoke, do upgrade manually
+                        tunnel.command(['sudo', '-i', '/opt/mesosphere/bin/pkgpanda', 'uninstall'])
+                        tunnel.command(['sudo', 'rm', '-rf', '/opt/mesosphere', '/etc/mesosphere'])
+                        tunnel.command(['sudo', 'bash', 'dcos_install.sh', '-d', role])
+                    log.info('Waiting for {} to rejoin the cluster...'.format(role_name))
+                    if role == 'master':
+                        port = "5050"
+                        wait_key = 'registrar/log/recovered'
+                    else:
+                        port = "5051"
+                        wait_key = 'slave/registered'
+                    try:
+                        wait_for_mesos_metric(dcos_api_session, port, wait_key, tunnel)
+                    except retrying.RetryError as exc:
+                        raise Exception(
+                            'Timed out waiting for {} to rejoin the cluster after upgrade: {}'.
+                            format(role_name, repr(host.public_ip))
+                        ) from exc

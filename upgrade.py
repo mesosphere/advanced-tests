@@ -15,14 +15,14 @@ log = logging.getLogger(__name__)
 @retrying.retry(
     wait_fixed=1000 * 10,
     retry_on_result=lambda result: result is False)
-def wait_for_mesos_metric(api_session, port, key, ssh_tunnel):
+def wait_for_mesos_metric(api_session, port, key, ssh_tunnel, private_ip):
     """Return True when host's Mesos metric key is equal to value."""
     log.info('Polling metrics snapshot endpoint')
     auth_str = api_session.auth_user.auth_header['Authorization']
     curl_cmd = [
         'curl', '--insecure',
         '-H', 'Authorization:' + auth_str,
-        api_session.default_url.scheme + '://' + "0.0.0.0:" + port + '/metrics/snapshot']
+        api_session.default_url.scheme + '://' + private_ip + ':' + port + '/metrics/snapshot']
     response = json.loads(ssh_tunnel.command(curl_cmd).decode('utf-8'))
     return response[key] == 1
 
@@ -165,7 +165,7 @@ def upgrade_dcos(
                         port = "5051"
                         wait_key = 'slave/registered'
                     try:
-                        wait_for_mesos_metric(dcos_api_session, port, wait_key, tunnel)
+                        wait_for_mesos_metric(dcos_api_session, port, wait_key, tunnel, host.private_ip)
                     except retrying.RetryError as exc:
                         raise Exception(
                             'Timed out waiting for {} to rejoin the cluster after upgrade: {}'.

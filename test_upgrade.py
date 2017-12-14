@@ -360,7 +360,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     """
     # Check for previous installation artifacts first
     bootstrap_host = onprem_cluster.bootstrap_host.public_ip
-    bootstrap_ssh_client = launcher.get_ssh_client(user='bootstrap_ssh_user')
+    bootstrap_ssh_client = launcher.get_bootstrap_ssh_client()
     upgrade.reset_bootstrap_host(bootstrap_ssh_client, bootstrap_host)
 
     upgrade_config_overrides = dict()
@@ -372,31 +372,23 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
     upgrade_config.update({
         'cluster_name': 'My Upgraded DC/OS',
-        'ssh_user': onprem_cluster.ssh_client.user,  # can probably drop this field
         'bootstrap_url': 'http://' + onprem_cluster.bootstrap_host.private_ip,
-        'master_list': [h.private_ip for h in onprem_cluster.masters],
-        'agent_list': [h.private_ip for h in onprem_cluster.private_agents],
-        'public_agent_list': [h.private_ip for h in onprem_cluster.public_agents]})
+        'master_list': [h.private_ip for h in onprem_cluster.masters]})
     upgrade_config.update(upgrade_config_overrides)
     # if IP detect public was not present, go ahead an inject it
     if 'ip_detect_public_contents' not in upgrade_config:
         upgrade_config['ip_detect_public_contents'] = yaml.dump(pkg_resources.resource_string(
             'dcos_launch', 'ip-detect/aws_public.sh').decode())
 
-    bootstrap_home = onprem_cluster.ssh_client.get_home_dir(bootstrap_host)
-    genconf_dir = os.path.join(bootstrap_home, 'genconf')
     with bootstrap_ssh_client.tunnel(bootstrap_host) as tunnel:
         log.info('Setting up upgrade config on bootstrap host')
+        bootstrap_home = tunnel.command(['pwd']).decode().strip()
+        genconf_dir = os.path.join(bootstrap_home, 'genconf')
         tunnel.command(['mkdir', genconf_dir])
         # transfer the config file
         tunnel.copy_file(
             helpers.session_tempfile(yaml.dump(upgrade_config).encode()),
             os.path.join(bootstrap_home, 'genconf/config.yaml'))
-        # FIXME: we dont need the ssh key when the upgrade isnt being orchestratd
-        tunnel.copy_file(
-            helpers.session_tempfile(bootstrap_ssh_client.key.encode()),
-            os.path.join(bootstrap_home, 'genconf/ssh_key'))
-        tunnel.command(['chmod', '600', os.path.join(bootstrap_home, 'genconf/ssh_key')])
         # Move the ip-detect script to the expected default path
         # FIXME: can we just send the contents in the config and skip this?
         tunnel.copy_file(

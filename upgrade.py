@@ -141,17 +141,17 @@ def upgrade_dcos(
                 if use_checks:
                     # use checks is implicit in this command. The upgrade is
                     # completely contained to this step
-                    tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh'], stdout=sys.stdout.buffer)
+                    tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh', '--verbose'], stdout=sys.stdout.buffer)
                 else:
                     # If not using the dcoc-checks service, polling endpoints is
                     # required in order to pace the upgrade to persist state.
                     if use_node_upgrade_script:
                         if upgrade_version.startswith('1.1'):
                             # checks are implicit and must be disabled in 1.10 and above
-                            tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh', '--skip-checks'])
+                            tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh', '--skip-checks', '--verbose'])
                         else:
                             # older installer have no concepts of checks
-                            tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh'])
+                            tunnel.command(['sudo', 'bash', 'dcos_node_upgrade.sh', '--verbose'])
                     else:
                         # no upgrade script to invoke, do upgrade manually
                         tunnel.command(['sudo', '-i', '/opt/mesosphere/bin/pkgpanda', 'uninstall'])

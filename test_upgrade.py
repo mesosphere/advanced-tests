@@ -378,7 +378,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     # if IP detect public was not present, go ahead an inject it
     if 'ip_detect_public_contents' not in upgrade_config:
         upgrade_config['ip_detect_public_contents'] = yaml.dump(pkg_resources.resource_string(
-            'dcos_launch', 'ip-detect/aws_public.sh').decode())
+            'dcos_launch', 'ip-detect-public/aws.sh').decode())
 
     with bootstrap_ssh_client.tunnel(bootstrap_host) as tunnel:
         log.info('Setting up upgrade config on bootstrap host')

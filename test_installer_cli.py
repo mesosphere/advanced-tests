@@ -95,7 +95,7 @@ def onprem_launcher():
 
 
 @pytest.fixture(scope='session')
-def onprem_cluster(onprem_launcher, cluster_info_path) -> onprem.OnpremCluster:
+def onprem_cluster(onprem_launcher, cluster_info_path):
     """ This fixture uses the OnpremLauncher, but only spins up a bare cluster
     by calling the create command and then not calling the wait command. Rather,
     the bare cluster interface is exposed for waiting so that DC/OS will not be

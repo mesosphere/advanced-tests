@@ -26,8 +26,6 @@ import os
 import pprint
 import uuid
 
-import pkg_resources
-
 from dcos_test_utils import dcos_api, enterprise, helpers
 import pytest
 import retrying
@@ -375,25 +373,16 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
         'bootstrap_url': 'http://' + onprem_cluster.bootstrap_host.private_ip,
         'master_list': [h.private_ip for h in onprem_cluster.masters]})
     upgrade_config.update(upgrade_config_overrides)
-    # if IP detect public was not present, go ahead an inject it
-    if 'ip_detect_public_contents' not in upgrade_config:
-        upgrade_config['ip_detect_public_contents'] = yaml.dump(pkg_resources.resource_string(
-            'dcos_launch', 'ip-detect-public/aws.sh').decode())
+    with open(os.path.join(launcher.config['genconf_dir'], 'config.yaml'), 'w') as f:
+        yaml.safe_dump(upgrade_config, f)
 
     with bootstrap_ssh_client.tunnel(bootstrap_host) as tunnel:
         log.info('Setting up upgrade config on bootstrap host')
         bootstrap_home = tunnel.command(['pwd']).decode().strip()
         genconf_dir = os.path.join(bootstrap_home, 'genconf')
-        tunnel.command(['mkdir', genconf_dir])
+        tunnel.command(['mkdir', '-p', genconf_dir])
         # transfer the config file
-        tunnel.copy_file(
-            helpers.session_tempfile(yaml.dump(upgrade_config).encode()),
-            os.path.join(bootstrap_home, 'genconf/config.yaml'))
-        # Move the ip-detect script to the expected default path
-        # FIXME: can we just send the contents in the config and skip this?
-        tunnel.copy_file(
-            pkg_resources.resource_filename('dcos_launch', 'ip-detect/aws.sh'),
-            os.path.join(bootstrap_home, 'genconf/ip-detect'))
+        tunnel.copy_file(launcher.config['genconf_dir'], bootstrap_home)
 
     # do the actual upgrade
     upgrade.upgrade_dcos(

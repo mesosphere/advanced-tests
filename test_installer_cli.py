@@ -14,7 +14,8 @@ import yaml
 
 import dcos_launch
 from dcos_launch import config
-from dcos_test_utils import helpers, onprem, ssh_client
+from dcos_launch.platforms import onprem
+from dcos_test_utils import helpers, ssh_client
 
 from rc_support import init_runtime_config
 
@@ -144,11 +145,11 @@ def test_installer_cli(onprem_cluster, onprem_launcher):
     ssh.command(host, ['mkdir', '-p', genconf_dir])
 
     installer_path = os.path.join(home_dir, 'dcos_generate_config.sh')
-    onprem.download_dcos_installer(
-        ssh,
-        host,
-        installer_path,
-        onprem_launcher.config['installer_url'])
+    with ssh.tunnel(host) as tunnel:
+        onprem.download_dcos_installer(
+            tunnel,
+            installer_path,
+            onprem_launcher.config['installer_url'])
     cli_installer = DcosCliInstaller(host, installer_path, ssh)
     log.info('Installer is ready for use!')
 

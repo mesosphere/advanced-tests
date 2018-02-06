@@ -74,7 +74,7 @@ TEST_UPGRADE_INSTALLER_URL=https://downloads.mesosphere.io/dcos-enterprise/testi
 TEST_UPGRADE_USE_CHECKS=true
 TEST_UPGRADE_USE_PODS=true
 TEST_UPGRADE_ENTERPRISE=false
-TEST_UPGRADE_INSTALLER_URL=https://downloads.dcos.io/dcos/testing/1.11/dcos_generate_config.sh
+TEST_LAUNCH_CONFIG_INSTALLER_URL=https://downloads.dcos.io/dcos/testing/1.11/dcos_generate_config.sh
 
 [upgrade-from-1.11-ee]
 TEST_UPGRADE_USE_CHECKS=true

@@ -415,7 +415,6 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
 
 class TestUpgrade:
-    @pytest.mark.xfail
     def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload):
         test_app_ids, test_pod_ids, tasks_start, _ = setup_workload
         app_tasks_end = {app_id: sorted(app_task_ids(upgraded_dcos, app_id)) for app_id in test_app_ids}

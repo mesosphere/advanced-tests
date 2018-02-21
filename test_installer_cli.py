@@ -210,7 +210,7 @@ def test_installer_cli(onprem_cluster, onprem_launcher):
     log.info('Transferring deployment license key')
     cli_installer.copy_to_host(
         helpers.session_tempfile(
-            os.environ['DCOS_LICENSE'].encode()), os.path.join(genconf_dir, 'license_key'))
+            os.environ['DCOS_LICENSE'].encode()), os.path.join(genconf_dir, 'license.txt'))
 
     log.info('Running installation procedure')
     cli_installer.genconf()

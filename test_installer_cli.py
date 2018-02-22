@@ -207,6 +207,11 @@ def test_installer_cli(onprem_cluster, onprem_launcher):
             onprem_launcher.config['ssh_private_key'].encode()), os.path.join(genconf_dir, 'ssh_key'))
     cli_installer.ssh_command(['chmod', '600', os.path.join(genconf_dir, 'ssh_key')])
 
+    log.info('Transferring deployment license key')
+    cli_installer.copy_to_host(
+        helpers.session_tempfile(
+            os.environ.get('DCOS_LICENSE').encode()), os.path.join(genconf_dir, 'license.txt'))
+
     log.info('Running installation procedure')
     cli_installer.genconf()
     if os.environ['TEST_INSTALL_PREREQS'] == 'true':

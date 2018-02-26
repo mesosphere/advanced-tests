@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope='session', autouse=True)
 def init_rc():
-    init_runtime_config("installer-cli")
+    init_runtime_config(os.getenv('TEST_CLI_PRESETS', 'installer-cli'))
 
 
 class DcosCliInstaller():

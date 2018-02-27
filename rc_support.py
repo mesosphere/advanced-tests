@@ -62,6 +62,7 @@ def _generate_config(namespace: str, env: Dict[str, str], config: ConfigParser) 
     """
     new_namespace = _normalize_namespace(namespace)
     if new_namespace in config:
+        log.info('Using {} namespace to set config'.format(new_namespace))
         values = config[new_namespace]
         new_env = env.copy()
         for k, v in values.items():

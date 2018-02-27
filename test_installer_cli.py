@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope='session', autouse=True)
 def init_rc():
+    log.info('Running CLI Installer with: {} or {}'.format(os.getenv('TEST_CLI_PRESETS'), os.getenv('TEST_CLI_PRESETS', 'installer-cli')))
     init_runtime_config(os.getenv('TEST_CLI_PRESETS', 'installer-cli'))
 
 

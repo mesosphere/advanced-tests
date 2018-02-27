@@ -48,7 +48,9 @@ def _normalize_namespace(namespace: str):
         if len(tag_split) > 2:
             new_tag = '.'.join(tag_split[:2])
             namespace_split[2] = new_tag
-    return '-'.join(namespace_split)
+    formatted_namespace = '-'.join(namespace_split)
+    log.info('Normalizing {} namespace into: {}'.format(namespace, formatted_namespace))
+    return formatted_namespace
 
 
 def _generate_config(namespace: str, env: Dict[str, str], config: ConfigParser) -> Dict[str, str]:

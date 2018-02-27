@@ -39,7 +39,7 @@ def _load_config(file_path: str) -> ConfigParser:
 def _normalize_namespace(namespace: str):
     """ Reduces tag labels to major version only when running against upgrade
     """
-    if not namespace.startswith('upgrade'):
+    if not namespace.startswith('upgrade') and not namespace.startswith('installer-cli'):
         return namespace
     namespace_split = namespace.split('-')
     if len(namespace_split) > 2:

@@ -39,7 +39,7 @@ def _load_config(file_path: str) -> ConfigParser:
 def _normalize_namespace(namespace: str):
     """ Reduces tag labels to major version only when running against upgrade
     """
-    if not namespace.startswith('upgrade'):
+    if not namespace.startswith('upgrade') and not namespace.startswith('installer-cli'):
         return namespace
     namespace_split = namespace.split('-')
     if len(namespace_split) > 2:
@@ -48,7 +48,9 @@ def _normalize_namespace(namespace: str):
         if len(tag_split) > 2:
             new_tag = '.'.join(tag_split[:2])
             namespace_split[2] = new_tag
-    return '-'.join(namespace_split)
+    formatted_namespace = '-'.join(namespace_split)
+    log.info('Normalizing {} namespace into: {}'.format(namespace, formatted_namespace))
+    return formatted_namespace
 
 
 def _generate_config(namespace: str, env: Dict[str, str], config: ConfigParser) -> Dict[str, str]:
@@ -62,6 +64,7 @@ def _generate_config(namespace: str, env: Dict[str, str], config: ConfigParser) 
     """
     new_namespace = _normalize_namespace(namespace)
     if new_namespace in config:
+        log.info('Using {} namespace to set config'.format(new_namespace))
         values = config[new_namespace]
         new_env = env.copy()
         for k, v in values.items():

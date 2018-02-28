@@ -108,3 +108,6 @@ TEST_CUSTOM_CHECKS=false
 
 [installer-cli-1.9]
 TEST_CUSTOM_CHECKS=false
+
+[installer-cli-1.8]
+TEST_CUSTOM_CHECKS=false

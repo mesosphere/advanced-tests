@@ -1,4 +1,4 @@
-# advanced-tess
+# advanced-tests
 This repo is intended for tests that require modifying a DC/OS cluster beyond the supported APIs.
 * `test_aws_cf_failure.py`: launchs applications, kills all agents, and waits for the application to return to normal operation
 * `test_installer_cli.py`: runs through an installation using the CLI commands of `dcos_generate_config.sh` AKA the onprem installer

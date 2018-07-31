@@ -304,6 +304,35 @@ def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app
     if dcos_api_session.default_url.scheme == 'https':
         dcos_api_session.set_ca_cert()
     dcos_api_session.wait_for_dcos()
+
+    # Installing dcos-enterprise-cli.
+    dcos_api_session.cosmos.install_package('dcos-enterprise-cli', os.environ.get('DCOS-ENTERPRISE-CLI_VERSION'),
+                                                 None)
+
+    # Dictionary containing installed app-ids.
+    app_ids = {}
+
+    # Add essential services for basic run test
+    services = {
+        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
+        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
+        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None}
+    }
+
+    for package, config in services.items():
+        installed_package = dcos_api_session.cosmos.install_package(package, config['version'], config['option'])
+        log.info("Installing {0} {1}".format(package, config['version'] or "(most recent version)"))
+
+        app_ids[package] = installed_package.json()['appId']
+
+    # Waiting for deployments to complete.
+    dcos_api_session.marathon.wait_for_deployments_complete()
+    log.info("Completed installing required services.")
+
+    # Checking whether applications are running without errors.
+    for package in app_ids.keys():
+        assert dcos_api_session.marathon.check_app_instances(app_ids[package], 1, True, False) is True
+
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
     dcos_api_session.marathon.deploy_app(viplisten_app)

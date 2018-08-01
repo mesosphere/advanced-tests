@@ -261,7 +261,7 @@ def dcos_api_session(onprem_cluster, launcher, is_enterprise):
     return make_dcos_api_session(
         onprem_cluster, launcher, is_enterprise, launcher.config['dcos_config'].get('security'))
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def new_dcos_cli() -> Generator[dcos_cli.DcosCli, None, None]:
     cli = dcos_cli.DcosCli.new_cli()
     yield cli

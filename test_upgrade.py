@@ -371,9 +371,9 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
 
     # Add essential services for basic run test
     services = {
-        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': "--yes"},
-        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': "--yes"},
-        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': "--yes"}
+        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
+        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
+        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None}
     }
 
     for package, config in services.items():

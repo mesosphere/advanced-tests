@@ -26,12 +26,13 @@ import os
 import pprint
 import uuid
 
-from dcos_test_utils import dcos_api, enterprise, helpers
+from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
 import pytest
 import retrying
 import yaml
 
 import upgrade
+from dcos_test_utils.enterprise import EnterpriseApiSession
 
 log = logging.getLogger(__name__)
 
@@ -198,6 +199,46 @@ def docker_pod():
         'networks': [{'mode': 'host'}]
     }
 
+@pytest.fixture(scope='session')
+def spark_producer_job():
+    return "\"\
+        --conf spark.mesos.containerizer=mesos \
+        --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s \
+        --conf spark.scheduler.minRegisteredResourcesRatio=1.0 \
+        --conf spark.cores.max=2 \
+        --conf spark.executor.cores=2 \
+        --conf spark.executor.mem=2g \
+        --conf spark.driver.mem=2g \
+        --class KafkaRandomFeeder \
+        http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar \
+        --appName Producer \
+        --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 \
+        --topics mytopicC \
+        --numberOfWords 3600 \
+        --wordsPerSecond 1\""
+
+@pytest.fixture(scope='session')
+def spark_consumer_job():
+    return "\"\
+        --conf spark.mesos.containerizer=mesos \
+        --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s \
+        --conf spark.scheduler.minRegisteredResourcesRatio=1.0 \
+        --conf spark.cores.max=1 \
+        --conf spark.executor.cores=1 \
+        --conf spark.executor.mem=2g \
+        --conf spark.driver.mem=2g \
+        --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory \
+        --conf spark.cassandra.connection.port=9042 \
+        --class KafkaWordCount \
+        http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar \
+        --appName Consumer \
+        --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 \
+        --topics mytopicC \
+        --groupId group1 \
+        --batchSizeSeconds 10 \
+        --cassandraKeyspace mykeyspace \
+        --cassandraTable mytable\""
+
 
 @pytest.fixture(scope='session')
 def onprem_cluster(launcher):
@@ -218,6 +259,14 @@ def dcos_api_session(onprem_cluster, launcher, is_enterprise):
     """
     return make_dcos_api_session(
         onprem_cluster, launcher, is_enterprise, launcher.config['dcos_config'].get('security'))
+
+@pytest.fixture(scope='session')
+def dcoscli(
+    new_dcos_cli: dcos_cli.DcosCli,
+    dcos_api_session
+) -> dcos_cli.DcosCli:
+    new_dcos_cli.setup_enterprise(str(dcos_api_session.default_url))
+    return new_dcos_cli
 
 
 def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, security_mode=None):
@@ -300,7 +349,7 @@ def use_pods():
 
 
 @pytest.fixture(scope='session')
-def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
+def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
     if dcos_api_session.default_url.scheme == 'https':
         dcos_api_session.set_ca_cert()
     dcos_api_session.wait_for_dcos()
@@ -314,9 +363,9 @@ def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app
 
     # Add essential services for basic run test
     services = {
-        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
-        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
-        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None}
+        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': "--yes"},
+        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': "--yes"},
+        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': "--yes"}
     }
 
     for package, config in services.items():
@@ -328,6 +377,18 @@ def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app
     # Waiting for deployments to complete.
     dcos_api_session.marathon.wait_for_deployments_complete()
     log.info("Completed installing required services.")
+
+    dcoscli.exec_command(["dcos", "cassandra", "plan", "status", "deploy", "--json"])
+    dcoscli.exec_command(["dcos", "cassandra", "plan", "status", "recovery", "--json"])
+    dcoscli.exec_command(["dcos", "kafka", "plan", "status", "deploy", "--json"])
+    dcoscli.exec_command(["dcos", "kafka", "plan", "status", "recovery", "--json"])
+
+
+    dcoscli.exec_command(["dcos", "spark", "run", "--submit-args=" + spark_producer_job()])
+    dcos_api_session.marathon.wait_for_deployments_complete()
+
+    dcoscli.exec_command(["dcos", "spark", "run", "--submit-args=" + spark_consumer_job()])
+    dcos_api_session.marathon.wait_for_deployments_complete()
 
     # Checking whether applications are running without errors.
     for package in app_ids.keys():

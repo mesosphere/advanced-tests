@@ -25,6 +25,7 @@ import math
 import os
 import pprint
 import uuid
+from typing import Generator
 
 from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
 import pytest
@@ -259,6 +260,13 @@ def dcos_api_session(onprem_cluster, launcher, is_enterprise):
     """
     return make_dcos_api_session(
         onprem_cluster, launcher, is_enterprise, launcher.config['dcos_config'].get('security'))
+
+@pytest.fixture
+def new_dcos_cli() -> Generator[dcos_cli.DcosCli, None, None]:
+    cli = dcos_cli.DcosCli.new_cli()
+    yield cli
+    os.remove(cli.path)
+    cli.clear_cli_dir()
 
 @pytest.fixture(scope='session')
 def dcoscli(

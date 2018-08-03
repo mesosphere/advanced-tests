@@ -386,6 +386,10 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     dcos_api_session.marathon.wait_for_deployments_complete()
     log.info("Completed installing required services.")
 
+    dcoscli.exec_command("dcos package install cassandra --cli".split())
+    dcoscli.exec_command("dcos package install kafka --cli".split())
+    dcoscli.exec_command("dcos package install spark --cli".split())
+
     dcoscli.exec_command(["dcos", "cassandra", "plan", "status", "deploy", "--json"])
     dcoscli.exec_command(["dcos", "cassandra", "plan", "status", "recovery", "--json"])
     dcoscli.exec_command(["dcos", "kafka", "plan", "status", "deploy", "--json"])

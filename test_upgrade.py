@@ -363,8 +363,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     dcos_api_session.wait_for_dcos()
 
     # Installing dcos-enterprise-cli.
-    dcos_api_session.cosmos.install_package('dcos-enterprise-cli', os.environ.get('DCOS-ENTERPRISE-CLI_VERSION'),
-                                                 None)
+    dcos_api_session.cosmos.install_package('dcos-enterprise-cli', None, None)
 
     # Dictionary containing installed app-ids.
     app_ids = {}
@@ -386,15 +385,14 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     dcos_api_session.marathon.wait_for_deployments_complete()
     log.info("Completed installing required services.")
 
-    dcoscli.exec_command("dcos package install cassandra --cli".split())
-    dcoscli.exec_command("dcos package install kafka --cli".split())
-    dcoscli.exec_command("dcos package install spark --cli".split())
+    dcoscli.exec_command("dcos package install cassandra --cli --yes".split())
+    dcoscli.exec_command("dcos package install kafka --cli --yes".split())
+    dcoscli.exec_command("dcos package install spark --cli --yes".split())
 
-    dcoscli.exec_command(["dcos", "cassandra", "plan", "status", "deploy", "--json"])
-    dcoscli.exec_command(["dcos", "cassandra", "plan", "status", "recovery", "--json"])
-    dcoscli.exec_command(["dcos", "kafka", "plan", "status", "deploy", "--json"])
-    dcoscli.exec_command(["dcos", "kafka", "plan", "status", "recovery", "--json"])
-
+    dcoscli.exec_command("dcos cassandra plan status deploy --json".split())
+    dcoscli.exec_command("dcos cassandra plan status recovery --json".split())
+    dcoscli.exec_command("dcos kafka plan status deploy --json".split())
+    dcoscli.exec_command("dcos kafka plan status recovery --json".split())
 
     dcoscli.exec_command(["dcos", "spark", "run", "--submit-args=" + spark_producer_job()])
     dcos_api_session.marathon.wait_for_deployments_complete()

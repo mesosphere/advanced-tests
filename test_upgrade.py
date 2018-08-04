@@ -404,6 +404,9 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     for package in app_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(app_ids[package], 1, True, False) is True
 
+    # Preserve the current quantity of words from the Kafka job so we can
+    kafka_job_words = dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())
+
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
     dcos_api_session.marathon.deploy_app(viplisten_app)
@@ -448,7 +451,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     # See this issue for why we check for a difference:
     # https://issues.apache.org/jira/browse/MESOS-1718
     task_state_start = get_master_task_state(dcos_api_session, tasks_start[test_app_ids[0]][0])
-    return test_app_ids, test_pod_ids, tasks_start, task_state_start
+    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words
 
 
 @pytest.fixture(scope='session')
@@ -560,3 +563,15 @@ class TestUpgrade:
             'Hostname failed to resolve at these times:\n{failures}'.format(
                 hostname=dns_app['env']['RESOLVE_NAME'],
                 failures='\n'.join(dns_failure_times))
+
+    def test_cassandra_tasks_survive(self, dcos_api_session, setup_workload):
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words = setup_workload
+
+        # Checking whether applications are running without errors.
+        for package in test_app_ids.keys():
+            assert dcos_api_session.marathon.check_app_instances(test_app_ids[package], 1, True, False) is True
+
+        # Preserve the current quantity of words from the Kafka job so we can
+        kafka_job_words_post_upgrade = dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())
+
+        assert len(kafka_job_words_post_upgrade) > len(kafka_job_words)

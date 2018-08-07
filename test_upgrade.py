@@ -335,11 +335,14 @@ def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
     cassandra_deploy_json_return_string = json.loads(
         dcoscli.exec_command(cli_commands.split())[0])
 
-    while (str(cassandra_deploy_json_return_string["status"]) != str("COMPLETE")):
+    count = 0
+
+    while (str(cassandra_deploy_json_return_string["status"]) != str("COMPLETE") and count < 60):
         log.info("Waiting for '" + str(cli_commands) + "' to complete deploying")
         time.sleep(5)
         cassandra_deploy_json_return_string = json.loads(
             dcoscli.exec_command(cli_commands.split())[0])
+        count += 1
 
 
 @pytest.fixture(scope='session')

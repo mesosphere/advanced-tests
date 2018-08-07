@@ -31,6 +31,8 @@ from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
 import pytest
 import retrying
 import yaml
+import json
+import time
 
 import upgrade
 from dcos_test_utils.enterprise import EnterpriseApiSession
@@ -202,43 +204,11 @@ def docker_pod():
 
 @pytest.fixture(scope='session')
 def spark_producer_job():
-    return "\"\
-        --conf spark.mesos.containerizer=mesos \
-        --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s \
-        --conf spark.scheduler.minRegisteredResourcesRatio=1.0 \
-        --conf spark.cores.max=2 \
-        --conf spark.executor.cores=2 \
-        --conf spark.executor.mem=2g \
-        --conf spark.driver.mem=2g \
-        --class KafkaRandomFeeder \
-        http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar \
-        --appName Producer \
-        --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 \
-        --topics mytopicC \
-        --numberOfWords 3600 \
-        --wordsPerSecond 1\""
+    return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=2 --conf spark.executor.cores=2 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --class KafkaRandomFeeder http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar --appName Producer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --numberOfWords 3600 --wordsPerSecond 1"'
 
 @pytest.fixture(scope='session')
 def spark_consumer_job():
-    return "\"\
-        --conf spark.mesos.containerizer=mesos \
-        --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s \
-        --conf spark.scheduler.minRegisteredResourcesRatio=1.0 \
-        --conf spark.cores.max=1 \
-        --conf spark.executor.cores=1 \
-        --conf spark.executor.mem=2g \
-        --conf spark.driver.mem=2g \
-        --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory \
-        --conf spark.cassandra.connection.port=9042 \
-        --class KafkaWordCount \
-        http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar \
-        --appName Consumer \
-        --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 \
-        --topics mytopicC \
-        --groupId group1 \
-        --batchSizeSeconds 10 \
-        --cassandraKeyspace mykeyspace \
-        --cassandraTable mytable\""
+    return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=1 --conf spark.executor.cores=1 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory --conf spark.cassandra.connection.port=9042 --class KafkaWordCount http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar --appName Consumer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --groupId group1 --batchSizeSeconds 10 --cassandraKeyspace mykeyspace --cassandraTable mytable"'
 
 
 @pytest.fixture(scope='session')
@@ -355,6 +325,22 @@ def parse_dns_log(dns_log_content):
 def use_pods():
     return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
+def wait_for_frameworks_to_deploy(dcoscli):
+    wait_for_individual_framework_to_deploy(dcoscli, "dcos cassandra plan status deploy --json")
+    wait_for_individual_framework_to_deploy(dcoscli, "dcos cassandra plan status recovery --json")
+    wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status deploy --json")
+    wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status recovery --json")
+
+def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
+    cassandra_deploy_json_return_string = json.loads(
+        dcoscli.exec_command(cli_commands.split())[0])
+
+    while (str(cassandra_deploy_json_return_string["status"]) != str("COMPLETE")):
+        log.info("Waiting for '" + str(cli_commands) + "' to complete deploying")
+        time.sleep(5)
+        cassandra_deploy_json_return_string = json.loads(
+            dcoscli.exec_command(cli_commands.split())[0])
+
 
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
@@ -389,15 +375,12 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     dcoscli.exec_command("dcos package install kafka --cli --yes".split())
     dcoscli.exec_command("dcos package install spark --cli --yes".split())
 
-    dcoscli.exec_command("dcos cassandra plan status deploy --json".split())
-    dcoscli.exec_command("dcos cassandra plan status recovery --json".split())
-    dcoscli.exec_command("dcos kafka plan status deploy --json".split())
-    dcoscli.exec_command("dcos kafka plan status recovery --json".split())
+    wait_for_frameworks_to_deploy(dcoscli)
 
-    dcoscli.exec_command(["dcos", "spark", "run", "--submit-args=" + spark_producer_job()])
+    dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    dcoscli.exec_command(["dcos", "spark", "run", "--submit-args=" + spark_consumer_job()])
+    dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
     dcos_api_session.marathon.wait_for_deployments_complete()
 
     # Checking whether applications are running without errors.

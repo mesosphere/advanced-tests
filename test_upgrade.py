@@ -344,6 +344,19 @@ def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
             dcoscli.exec_command(cli_commands.split())[0])
         count += 1
 
+def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
+    driver_name = run_command_response[run_command_response.index('driver-'):]
+
+    status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
+
+    count = 0
+
+    while (status_command_response.find("state: TASK_RUNNING") == -1 and count <= 36):
+        log.info("Waiting for '" + str(driver_name) + "' to complete deploying - Attempt: " + str(count))
+        time.sleep(5)
+        status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
+        count += 1
+
 
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
@@ -370,6 +383,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
 
         app_ids[package] = installed_package.json()['appId']
 
+
     # Waiting for deployments to complete.
     dcos_api_session.marathon.wait_for_deployments_complete()
     log.info("Completed installing required services.")
@@ -380,11 +394,11 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
 
     wait_for_frameworks_to_deploy(dcoscli)
 
-    dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
-    dcos_api_session.marathon.wait_for_deployments_complete()
+    spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
+    wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
 
-    dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
-    dcos_api_session.marathon.wait_for_deployments_complete()
+    spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
+    wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
     # Checking whether applications are running without errors.
     for package in app_ids.keys():

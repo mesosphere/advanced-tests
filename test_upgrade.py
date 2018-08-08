@@ -345,7 +345,7 @@ def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
         count += 1
 
 def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
-    driver_name = run_command_response[run_command_response.index('driver-'):]
+    driver_name = str(run_command_response[0])[str(run_command_response[0]).index('driver-'):]
 
     status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
 

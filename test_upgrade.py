@@ -337,7 +337,7 @@ def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
 
     count = 0
 
-    while (str(cassandra_deploy_json_return_string["status"]) != str("COMPLETE") and count < 60):
+    while (str(cassandra_deploy_json_return_string["status"]) != str("COMPLETE") and count <= 120):
         log.info("Waiting for '" + str(cli_commands) + "' to complete deploying - Attempt: " + str(count))
         time.sleep(5)
         cassandra_deploy_json_return_string = json.loads(

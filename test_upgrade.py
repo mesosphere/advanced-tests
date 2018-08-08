@@ -338,7 +338,7 @@ def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
     count = 0
 
     while (str(cassandra_deploy_json_return_string["status"]) != str("COMPLETE") and count < 60):
-        log.info("Waiting for '" + str(cli_commands) + "' to complete deploying")
+        log.info("Waiting for '" + str(cli_commands) + "' to complete deploying - Attempt: " + str(count))
         time.sleep(5)
         cassandra_deploy_json_return_string = json.loads(
             dcoscli.exec_command(cli_commands.split())[0])
@@ -380,10 +380,10 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
 
     wait_for_frameworks_to_deploy(dcoscli)
 
-    dcoscli.exec_command("dcos spark run --submit-args=" + spark_producer_job())
+    dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    dcoscli.exec_command("dcos spark run --submit-args=" + spark_consumer_job())
+    dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
     dcos_api_session.marathon.wait_for_deployments_complete()
 
     # Checking whether applications are running without errors.

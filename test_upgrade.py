@@ -406,10 +406,10 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     for package in framework_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
-    time.sleep(60)
+    time.sleep(180)
 
     # Preserve the current quantity of words from the Kafka job so we can
-    kafka_job_words = dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())
+    kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split()))[0]["0"]
 
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
@@ -576,6 +576,6 @@ class TestUpgrade:
             assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
         # Preserve the current quantity of words from the Kafka job so we can
-        kafka_job_words_post_upgrade = dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())
+        kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split()))[0]["0"]
 
         assert len(kafka_job_words_post_upgrade) > len(kafka_job_words)

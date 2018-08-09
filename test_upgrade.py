@@ -369,8 +369,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     # Installing dcos-enterprise-cli.
     dcos_api_session.cosmos.install_package('dcos-enterprise-cli', None, None)
 
-    # Dictionary containing installed app-ids.
-    app_ids = {}
+    # Dictionary containing installed framework-ids.
+    framework_ids = {}
 
     # Add essential services for basic run test
     services = {
@@ -383,7 +383,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
         installed_package = dcos_api_session.cosmos.install_package(package, config['version'], config['option'])
         log.info("Installing {0} {1}".format(package, config['version'] or "(most recent version)"))
 
-        app_ids[package] = installed_package.json()['appId']
+        framework_ids[package] = installed_package.json()['appId']
 
 
     # Waiting for deployments to complete.
@@ -403,10 +403,10 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
     # Checking whether applications are running without errors.
-    for package in app_ids.keys():
-        assert dcos_api_session.marathon.check_app_instances(app_ids[package], 1, True, False) is True
+    for package in framework_ids.keys():
+        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
-    time.sleep(300)
+    time.sleep(60)
 
     # Preserve the current quantity of words from the Kafka job so we can
     kafka_job_words = dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())
@@ -455,7 +455,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     # See this issue for why we check for a difference:
     # https://issues.apache.org/jira/browse/MESOS-1718
     task_state_start = get_master_task_state(dcos_api_session, tasks_start[test_app_ids[0]][0])
-    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words
+    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids
 
 
 @pytest.fixture(scope='session')
@@ -569,11 +569,11 @@ class TestUpgrade:
                 failures='\n'.join(dns_failure_times))
 
     def test_cassandra_tasks_survive(self, dcos_api_session, setup_workload):
-        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words = setup_workload
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids = setup_workload
 
         # Checking whether applications are running without errors.
-        for package in test_app_ids.keys():
-            assert dcos_api_session.marathon.check_app_instances(test_app_ids[package], 1, True, False) is True
+        for package in framework_ids.keys():
+            assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
         # Preserve the current quantity of words from the Kafka job so we can
         kafka_job_words_post_upgrade = dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())

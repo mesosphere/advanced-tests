@@ -373,7 +373,9 @@ def wait_for_kafka_topic_to_start_counting(dcoscli):
 
     count = 0
 
-    while (kafka_job_words == 0 and count <= 60):
+    log.info("Recieved: '" + kafka_job_words + "' which is equal to 0: '" + str(kafka_job_words) == "0" + "'")
+
+    while (str(kafka_job_words) == "0" and count <= 60):
         log.info("Waiting for the kafka topic 'mytopicC' to begin counting words - Attempt: " + str(count))
         time.sleep(5)
         kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]

@@ -349,14 +349,34 @@ def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
 
     status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
 
-    log.info(status_command_response)
-
     count = 0
 
     while (''.join(status_command_response).find("state: TASK_RUNNING") == -1 and count <= 36):
         log.info("Waiting for '" + str(driver_name) + "' to complete deploying - Attempt: " + str(count))
         time.sleep(5)
         status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
+        count += 1
+
+def wait_for_kafka_topic_to_start(dcoscli):
+    kafka_topic_list = str(dcoscli.exec_command("dcos kafka topic list".split()))
+
+    count = 0
+
+    while (kafka_topic_list.find("mytopicC") == -1 and count <= 60):
+        log.info("Waiting for the kafka topic 'mytopicC' to complete deploying - Attempt: " + str(count))
+        time.sleep(5)
+        kafka_topic_list = str(dcoscli.exec_command("dcos kafka topic list".split()))
+        count += 1
+
+def wait_for_kafka_topic_to_start_counting(dcoscli):
+    kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+
+    count = 0
+
+    while (kafka_job_words == 0 and count <= 60):
+        log.info("Waiting for the kafka topic 'mytopicC' to begin counting words - Attempt: " + str(count))
+        time.sleep(5)
+        kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
         count += 1
 
 
@@ -406,7 +426,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     for package in framework_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
-    time.sleep(300)
+    wait_for_kafka_topic_to_start(dcoscli)
+    wait_for_kafka_topic_to_start_counting(dcoscli)
 
     # Preserve the current quantity of words from the Kafka job so we can
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
@@ -578,4 +599,4 @@ class TestUpgrade:
         # Preserve the current quantity of words from the Kafka job so we can
         kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
-        assert len(kafka_job_words_post_upgrade) > len(kafka_job_words)
+        assert kafka_job_words_post_upgrade > kafka_job_words

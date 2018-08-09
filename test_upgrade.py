@@ -406,6 +406,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     for package in app_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(app_ids[package], 1, True, False) is True
 
+    time.sleep(300)
+
     # Preserve the current quantity of words from the Kafka job so we can
     kafka_job_words = dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())
 

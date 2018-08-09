@@ -568,7 +568,7 @@ class TestUpgrade:
                 hostname=dns_app['env']['RESOLVE_NAME'],
                 failures='\n'.join(dns_failure_times))
 
-    def test_cassandra_tasks_survive(self, dcos_api_session, setup_workload):
+    def test_cassandra_tasks_survive(self, dcos_api_session, setup_workload, dcoscli):
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids = setup_workload
 
         # Checking whether applications are running without errors.

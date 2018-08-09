@@ -349,9 +349,11 @@ def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
 
     status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
 
+    log.info(status_command_response)
+
     count = 0
 
-    while (status_command_response.find("state: TASK_RUNNING") == -1 and count <= 36):
+    while (''.join(status_command_response).find("state: TASK_RUNNING") == -1 and count <= 36):
         log.info("Waiting for '" + str(driver_name) + "' to complete deploying - Attempt: " + str(count))
         time.sleep(5)
         status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())

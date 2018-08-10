@@ -326,25 +326,28 @@ def use_pods():
     return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
 def wait_for_frameworks_to_deploy(dcoscli):
+    """Waits for cassandra and kafka to finish deploying"""
     wait_for_individual_framework_to_deploy(dcoscli, "dcos cassandra plan status deploy --json")
     wait_for_individual_framework_to_deploy(dcoscli, "dcos cassandra plan status recovery --json")
     wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status deploy --json")
     wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status recovery --json")
 
 def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
+    """Takes a cli command to run, and waits for the json attribute 'status' to be 'COMPLETE'"""
     cassandra_deploy_json_return_string = json.loads(
         dcoscli.exec_command(cli_commands.split())[0])
 
     count = 0
 
     while (str(cassandra_deploy_json_return_string["status"]) != str("COMPLETE") and count <= 120):
-        log.info("Waiting for '" + str(cli_commands) + "' to complete deploying - Attempt: " + str(count))
+        log.info("Waiting for '" + str(cli_commands).strip() + "' to complete deploying - Attempt: " + str(count))
         time.sleep(5)
         cassandra_deploy_json_return_string = json.loads(
             dcoscli.exec_command(cli_commands.split())[0])
         count += 1
 
 def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
+    """Takes a spark status name to run, and waits for the response to contain the 'state' of 'TASK RUNNING'"""
     driver_name = str(run_command_response[0])[str(run_command_response[0]).index('driver-'):]
 
     status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
@@ -352,12 +355,13 @@ def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
     count = 0
 
     while (''.join(status_command_response).find("state: TASK_RUNNING") == -1 and count <= 36):
-        log.info("Waiting for '" + str(driver_name) + "' to complete deploying - Attempt: " + str(count))
+        log.info("Waiting for '" + str(driver_name).strip() + "' to complete deploying - Attempt: " + str(count))
         time.sleep(5)
         status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
         count += 1
 
 def wait_for_kafka_topic_to_start(dcoscli):
+    """Takes a kafka topic, and waits for the topic to appear in kafka's topic list"""
     kafka_topic_list = str(dcoscli.exec_command("dcos kafka topic list".split()))
 
     count = 0
@@ -369,6 +373,7 @@ def wait_for_kafka_topic_to_start(dcoscli):
         count += 1
 
 def wait_for_kafka_topic_to_start_counting(dcoscli):
+    """waits for the kafka topic started by our spark jobs to begin counting words"""
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
     count = 0
@@ -388,7 +393,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
         dcos_api_session.set_ca_cert()
     dcos_api_session.wait_for_dcos()
 
-    # Installing dcos-enterprise-cli.
+    # Installing dcos-enterprise-cli to start our frameworks, and install various jobs.
     dcos_api_session.cosmos.install_package('dcos-enterprise-cli', None, None)
 
     # Dictionary containing installed framework-ids.
@@ -401,23 +406,25 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
         'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None}
     }
 
+    #Installing the frameworks
     for package, config in services.items():
         installed_package = dcos_api_session.cosmos.install_package(package, config['version'], config['option'])
         log.info("Installing {0} {1}".format(package, config['version'] or "(most recent version)"))
 
         framework_ids[package] = installed_package.json()['appId']
 
-
     # Waiting for deployments to complete.
     dcos_api_session.marathon.wait_for_deployments_complete()
     log.info("Completed installing required services.")
 
+    #Install our various CLIs
     dcoscli.exec_command("dcos package install cassandra --cli --yes".split())
     dcoscli.exec_command("dcos package install kafka --cli --yes".split())
     dcoscli.exec_command("dcos package install spark --cli --yes".split())
 
     wait_for_frameworks_to_deploy(dcoscli)
 
+    # Run our two spark jobs to exercise all three of our frameworks
     spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
     wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
 
@@ -428,10 +435,11 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     for package in framework_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
+    # Wait for the kafka topic to show up in kafka's topic list, and then wait for the topic to begin producing the word count
     wait_for_kafka_topic_to_start(dcoscli)
     wait_for_kafka_topic_to_start_counting(dcoscli)
 
-    # Preserve the current quantity of words from the Kafka job so we can
+    # Preserve the current quantity of words from the Kafka job so we can compare it later
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
@@ -598,7 +606,7 @@ class TestUpgrade:
         for package in framework_ids.keys():
             assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
-        # Preserve the current quantity of words from the Kafka job so we can
+    # Get a new word count from kafka to compare to the word count from before the upgrade
         kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
         assert kafka_job_words_post_upgrade > kafka_job_words

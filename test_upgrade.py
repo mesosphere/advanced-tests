@@ -36,6 +36,7 @@ import yaml
 
 import upgrade
 from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
+from dcos_test_utils.enterprise import EnterpriseApiSession
 
 log = logging.getLogger(__name__)
 
@@ -589,22 +590,7 @@ def find_app_port(config, app_name):
     pattern = re.search(r'{0}(.+?)\n  bind .+:\d+'.format(app_name), config)
     return pattern.group()[-5:]
 
-@retrying.retry(stop_max_delay=10000)
-def get_app_port(app_name, ip):
-    """ Returns the port that the app is configured on.
-    """
-    get_config = requests.get('http://{}:9090/_haproxy_getconfig'.format(ip))
-    port = find_app_port(get_config.content.decode("utf-8"), app_name)
-    return port
-
-@retrying.retry(stop_max_delay=10000)
-def get_app_content(app_port, ip):
-    """ Returns the content of the app.
-    """
-    get_port = requests.get('http://{}:{}'.format(ip, app_port))
-    return (get_port.content.decode("utf-8").rstrip(), get_port.status_code)
-
-def spin_up_marathon_apps(superuser_api_session, public_ip):
+def spin_up_marathon_apps(superuser_api_session):
     app_defs = [docker_bridge(), docker_host(), docker_ippc(), ucr_bridge(), ucr_hort(), ucr_ippc()]
     app_ids = []
 
@@ -618,19 +604,6 @@ def spin_up_marathon_apps(superuser_api_session, public_ip):
 
         superuser_api_session.marathon.deploy_app(app_def)
         superuser_api_session.marathon.wait_for_deployments_complete
-
-        # port = get_app_port(app_name, public_ip)
-        # expected_port = app_def["labels"]["HAPROXY_0_PORT"]
-        # msg = "{} bound to {}, not {}.".format(app_name, port, expected_port)
-        # assert port == expected_port, msg
-        # log.info('{} is bound to port {}.'.format(app_name, port))
-        #
-        # text_response, status_code = get_app_content(port, public_ip)
-        # expected_response = app_name
-        # msg = "Response is {}, not {}".format(text_response, expected_response)
-        # if status_code == 200:
-        #     assert text_response == expected_response, msg
-        # log.info('Text response is {}.'.format(text_response))
 
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
@@ -661,6 +634,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
 
     # Waiting for deployments to complete.
     dcos_api_session.marathon.wait_for_deployments_complete()
+    for package in framework_ids.keys():
+        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
     log.info("Completed installing required services.")
 
     #Install our various CLIs
@@ -688,9 +663,9 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     # Preserve the current quantity of words from the Kafka job so we can compare it later
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
-    marathon_app_ids = spin_up_marathon_apps(dcos_api_session, onprem_cluster.public_agents[0])
+    marathon_app_ids = spin_up_marathon_apps(dcos_api_session)
 
-    # TODO(branden): We ought to be able to deploy these apps concurrently.
+    # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
     dcos_api_session.marathon.deploy_app(viplisten_app)
     dcos_api_session.marathon.wait_for_deployments_complete()

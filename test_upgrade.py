@@ -33,7 +33,7 @@ import pytest
 import requests
 import retrying
 import yaml
-from dcos import marathon
+#from dcos import marathon
 
 import upgrade
 from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
@@ -615,7 +615,7 @@ def spin_up_marathon_apps(public_ip):
         print(app_name)
         log.info('{} is being tested.'.format(app_name))
 
-        client = marathon.create_client()
+        client = None #marathon.create_client()
         client.add_app(app_def)
 
         # TODO: Add code to wait for app deployment

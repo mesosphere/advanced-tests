@@ -33,7 +33,6 @@ import pytest
 import requests
 import retrying
 import yaml
-#from dcos import marathon
 
 import upgrade
 from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
@@ -605,39 +604,33 @@ def get_app_content(app_port, ip):
     get_port = requests.get('http://{}:{}'.format(ip, app_port))
     return (get_port.content.decode("utf-8").rstrip(), get_port.status_code)
 
-def spin_up_marathon_apps(public_ip):
+def spin_up_marathon_apps(superuser_api_session, public_ip):
     app_defs = [docker_bridge(), docker_host(), docker_ippc(), ucr_bridge(), ucr_hort(), ucr_ippc()]
+    app_ids = []
 
     for app_def in app_defs:
         app_id = app_def['id']
+        app_ids.append(app_id)
 
         app_name = app_id[1:] if app_id[0] == '/' else app_id
         print(app_name)
         log.info('{} is being tested.'.format(app_name))
 
-        client = None #marathon.create_client()
-        client.add_app(app_def)
+        superuser_api_session.marathon.deploy_app(app_def)
+        superuser_api_session.marathon.wait_for_deployments_complete
 
-        # TODO: Add code to wait for app deployment
-        app = client.get_app(app_id)
-        tasks = app['tasksRunning']
-        instances = app_def['instances']
-        assert tasks == instances, ("Number of tasks is {}, {} were expected."
-            .format(tasks, instances))
-        log.info('Number of tasks for {} is {}'.format(app_name, tasks))
-
-        port = get_app_port(app_name, public_ip)
-        expected_port = app_def["labels"]["HAPROXY_0_PORT"]
-        msg = "{} bound to {}, not {}.".format(app_name, port, expected_port)
-        assert port == expected_port, msg
-        log.info('{} is bound to port {}.'.format(app_name, port))
-
-        text_response, status_code = get_app_content(port, public_ip)
-        expected_response = app_name
-        msg = "Response is {}, not {}".format(text_response, expected_response)
-        if status_code == 200:
-            assert text_response == expected_response, msg
-        log.info('Text response is {}.'.format(text_response))
+        # port = get_app_port(app_name, public_ip)
+        # expected_port = app_def["labels"]["HAPROXY_0_PORT"]
+        # msg = "{} bound to {}, not {}.".format(app_name, port, expected_port)
+        # assert port == expected_port, msg
+        # log.info('{} is bound to port {}.'.format(app_name, port))
+        #
+        # text_response, status_code = get_app_content(port, public_ip)
+        # expected_response = app_name
+        # msg = "Response is {}, not {}".format(text_response, expected_response)
+        # if status_code == 200:
+        #     assert text_response == expected_response, msg
+        # log.info('Text response is {}.'.format(text_response))
 
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
@@ -695,15 +688,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     # Preserve the current quantity of words from the Kafka job so we can compare it later
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
-
-
-
-
-    spin_up_marathon_apps(onprem_cluster.public_agents[0])
-
-
-
-
+    marathon_app_ids = spin_up_marathon_apps(dcos_api_session, onprem_cluster.public_agents[0])
 
     # TODO(branden): We ought to be able to deploy these apps concurrently.
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
@@ -749,7 +734,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     # See this issue for why we check for a difference:
     # https://issues.apache.org/jira/browse/MESOS-1718
     task_state_start = get_master_task_state(dcos_api_session, tasks_start[test_app_ids[0]][0])
-    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids
+    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids
 
 
 @pytest.fixture(scope='session')
@@ -863,7 +848,7 @@ class TestUpgrade:
                 failures='\n'.join(dns_failure_times))
 
     def test_cassandra_tasks_survive(self, dcos_api_session, setup_workload, dcoscli):
-        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids = setup_workload
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, _ = setup_workload
 
         # Checking whether applications are running without errors.
         for package in framework_ids.keys():
@@ -873,3 +858,8 @@ class TestUpgrade:
         kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
         assert kafka_job_words_post_upgrade > kafka_job_words
+
+    def test_marathonlb_apps_survived(self, dcos_api_session, setup_workload):
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
+        for marathon_app in marathon_app_ids:
+            assert dcos_api_session.marathon.check_app_instances(marathon_app, 1, True, False)

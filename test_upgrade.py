@@ -461,6 +461,7 @@ def new_dcos_cli() -> Generator[dcos_cli.DcosCli, None, None]:
     cli.clear_cli_dir()
 
 @pytest.fixture(scope='session')
+@retrying.retry(wait_fixed=5000, stop_max_delay=60000)
 def dcoscli(
     new_dcos_cli: dcos_cli.DcosCli,
     dcos_api_session

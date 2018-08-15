@@ -211,7 +211,7 @@ def spark_producer_job():
 def spark_consumer_job():
     return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=1 --conf spark.executor.cores=1 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory --conf spark.cassandra.connection.port=9042 --class KafkaWordCount http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar --appName Consumer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --groupId group1 --batchSizeSeconds 10 --cassandraKeyspace mykeyspace --cassandraTable mytable"'
 
-
+@pytest.fixture(scope='session')
 def docker_bridge():
     return {
         "id": "/nginx-docker-bridge",
@@ -245,9 +245,10 @@ def docker_bridge():
                 "mode": "container/bridge"
             }
         ],
-        "requirePorts": 'false'
+        "requirePorts": False
     }
 
+@pytest.fixture(scope='session')
 def docker_host():
     return {
         "id": "/nginx-docker-host",
@@ -265,7 +266,7 @@ def docker_host():
         "disk": 0,
         "instances": 4,
         "mem": 32,
-        "requirePorts": 'false',
+        "requirePorts": False,
         "labels": {
             "HAPROXY_GROUP": "external",
             "HAPROXY_0_PORT": "10300",
@@ -283,6 +284,7 @@ def docker_host():
         ]
     }
 
+@pytest.fixture(scope='session')
 def docker_ippc():
     return {
         "id": "/nginx-docker-ippc",
@@ -305,7 +307,7 @@ def docker_ippc():
                 }
             ]
         },
-        "requirePorts": 'false',
+        "requirePorts": False,
         "labels": {
             "HAPROXY_GROUP": "external",
             "HAPROXY_0_PORT": "10200",
@@ -318,6 +320,7 @@ def docker_ippc():
         }
     }
 
+@pytest.fixture(scope='session')
 def ucr_bridge():
     return {
         "id": "/nginx-ucr-bridge",
@@ -341,7 +344,7 @@ def ucr_bridge():
         "disk": 0,
         "instances": 4,
         "mem": 32,
-        "requirePorts": 'false',
+        "requirePorts": False,
         "labels": {
             "HAPROXY_GROUP": "external",
             "HAPROXY_0_PORT": "10500",
@@ -355,6 +358,7 @@ def ucr_bridge():
         ]
     }
 
+@pytest.fixture(scope='session')
 def ucr_hort():
     return {
         "id": "/nginx-ucr-host",
@@ -367,7 +371,7 @@ def ucr_hort():
             "volumes": [],
             "docker": {
                 "image": "nginx",
-                "forcePullImage": 'false',
+                "forcePullImage": False,
                 "parameters": []
             }
         },
@@ -396,6 +400,7 @@ def ucr_hort():
         ]
     }
 
+@pytest.fixture(scope='session')
 def ucr_ippc():
     return {
         "id": "/nginx-ucr-ippc",
@@ -408,7 +413,7 @@ def ucr_ippc():
             "volumes": [],
             "docker": {
                 "image": "nginx",
-                "forcePullImage": 'false',
+                "forcePullImage": False,
                 "parameters": []
             }
         },
@@ -600,10 +605,9 @@ def spin_up_marathon_apps(superuser_api_session):
         app_ids.append(app_id)
 
         app_name = app_id[1:] if app_id[0] == '/' else app_id
-        print(app_name)
         log.info('{} is being tested.'.format(app_name))
 
-        superuser_api_session.marathon.deploy_app(app_def)
+        superuser_api_session.marathon.deploy_app(json.dumps(app_def))
         superuser_api_session.marathon.wait_for_deployments_complete
 
 @pytest.fixture(scope='session')
@@ -839,3 +843,4 @@ class TestUpgrade:
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
         for marathon_app in marathon_app_ids:
             assert dcos_api_session.marathon.check_app_instances(marathon_app, 1, True, False)
+

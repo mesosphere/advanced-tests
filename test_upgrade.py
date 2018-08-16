@@ -726,6 +726,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     for package in framework_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
+    kafka_job_words = 0
+
     # Wait for the kafka topic to show up in kafka's topic list, and then wait for the topic to begin producing the word count
     # wait_for_kafka_topic_to_start(dcoscli)
     # wait_for_kafka_topic_to_start_counting(dcoscli)

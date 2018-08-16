@@ -239,6 +239,17 @@ def docker_bridge():
             "HAPROXY_0_VHOST": "nginx-docker-bridge.test",
             "HAPROXY_0_ENABLED": "true"
         },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
         "mem": 32,
         "networks": [
             {
@@ -273,7 +284,17 @@ def docker_host():
             "HAPROXY_0_VHOST": "nginx-docker-host.test",
             "HAPROXY_0_ENABLED": "true"
         },
-        "healthChecks": [],
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
         "fetch": [],
         "constraints": [],
         "portDefinitions": [
@@ -314,6 +335,17 @@ def docker_ippc():
             "HAPROXY_0_VHOST": "nginx-docker-ippc.test",
             "HAPROXY_0_ENABLED": "true"
         },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
         "ipAddress": {
             "groups": [],
             "networkName": "dcos"
@@ -351,6 +383,17 @@ def ucr_bridge():
             "HAPROXY_0_VHOST": "nginx-ucr-bridge.test",
             "HAPROXY_0_ENABLED": "true"
         },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
         "networks": [
             {
                 "mode": "container/bridge"
@@ -384,6 +427,17 @@ def ucr_hort():
             "HAPROXY_0_VHOST": "nginx-ucr-host.test",
             "HAPROXY_0_ENABLED": "true"
         },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
         "maxLaunchDelaySeconds": 3600,
         "mem": 32,
         "gpus": 0,
@@ -427,6 +481,17 @@ def ucr_ippc():
             "HAPROXY_0_BACKEND_SERVER_OPTIONS": "  server {serverName} {host_ipv4}:80 {cookieOptions}{healthCheckOptions}{otherOptions}\n",
             "HAPROXY_0_ENABLED": "true"
         },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
         "mem": 32,
         "gpus": 0,
         "networks": [

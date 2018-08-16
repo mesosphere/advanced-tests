@@ -597,7 +597,7 @@ def find_app_port(config, app_name):
     return pattern.group()[-5:]
 
 def spin_up_marathon_apps(superuser_api_session):
-    app_defs = [docker_bridge(), docker_host(), docker_ippc(), ucr_bridge(), ucr_hort(), ucr_ippc()]
+    app_defs = [viplisten_app(), docker_bridge(), docker_host(), docker_ippc(), ucr_bridge(), ucr_hort(), ucr_ippc()]
     app_ids = []
 
     for app_def in app_defs:

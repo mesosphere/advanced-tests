@@ -601,7 +601,7 @@ def spin_up_marathon_apps(superuser_api_session, docker_bridge, docker_host, doc
     app_ids = []
 
     for app_def in app_defs:
-        app_id = app_def()['id']
+        app_id = app_def['id']
         app_ids.append(app_id)
 
         app_name = app_id[1:] if app_id[0] == '/' else app_id

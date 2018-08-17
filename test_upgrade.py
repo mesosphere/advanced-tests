@@ -911,7 +911,7 @@ class TestUpgrade:
     def test_marathonlb_apps_survived(self, dcos_api_session, setup_workload):
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
-        log.info("Every marathon instance we attempted to run: '" + marathon_app_ids + "'")
+        log.info("Every marathon instance we attempted to run: '" + str(marathon_app_ids) + "'")
 
         for marathon_app in marathon_app_ids:
             assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, False)

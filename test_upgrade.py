@@ -675,6 +675,8 @@ def spin_up_marathon_apps(superuser_api_session, docker_bridge, docker_host, doc
         superuser_api_session.marathon.deploy_app(app_def)
         superuser_api_session.marathon.wait_for_deployments_complete
 
+    return app_ids
+
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
     if dcos_api_session.default_url.scheme == 'https':

@@ -913,8 +913,6 @@ class TestUpgrade:
 
         log.info("Every marathon instance we attempted to run: '" + marathon_app_ids + "'")
 
-        dcos_api_session.marathon.
-
         for marathon_app in marathon_app_ids:
             assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, False)
 

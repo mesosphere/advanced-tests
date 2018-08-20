@@ -20,21 +20,22 @@ Optional
       before the upgrade begins
 """
 import copy
+import json
 import logging
 import math
 import os
 import pprint
+import re
 import uuid
 from typing import Generator
 
-from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
 import pytest
+import requests
 import retrying
 import yaml
-import json
-import time
 
 import upgrade
+from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
 from dcos_test_utils.enterprise import EnterpriseApiSession
 
 log = logging.getLogger(__name__)
@@ -210,6 +211,297 @@ def spark_producer_job():
 def spark_consumer_job():
     return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=1 --conf spark.executor.cores=1 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory --conf spark.cassandra.connection.port=9042 --class KafkaWordCount http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar --appName Consumer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --groupId group1 --batchSizeSeconds 10 --cassandraKeyspace mykeyspace --cassandraTable mytable"'
 
+@pytest.fixture(scope='session')
+def docker_bridge():
+    return {
+        "id": "/nginx-docker-bridge",
+        "user": "root",
+        "cmd": "echo 'nginx-docker-bridge' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
+        "container": {
+            "portMappings": [
+                {
+                    "containerPort": 80,
+                    "hostPort": 0,
+                    "protocol": "tcp"
+                }
+            ],
+            "type": "DOCKER",
+            "volumes": [],
+            "docker": {
+                "image": "nginx"
+            }
+        },
+        "cpus": 0.1,
+        "instances": 4,
+        "labels": {
+            "HAPROXY_GROUP": "external",
+            "HAPROXY_0_PORT": "10100",
+            "HAPROXY_0_VHOST": "nginx-docker-bridge.test",
+            "HAPROXY_0_ENABLED": "true"
+        },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
+        "mem": 32,
+        "networks": [
+            {
+                "mode": "container/bridge"
+            }
+        ],
+        "requirePorts": False
+    }
+
+@pytest.fixture(scope='session')
+def docker_host():
+    return {
+        "id": "/nginx-docker-host",
+        "user":"root",
+        "cmd": "sed -i \"s/80/${PORT0}/\" /etc/nginx/conf.d/default.conf; echo 'nginx-docker-host' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
+        "container": {
+            "type": "DOCKER",
+            "volumes": [],
+            "docker": {
+                "image": "nginx",
+                "network": "HOST"
+            }
+        },
+        "cpus": 0.1,
+        "disk": 0,
+        "instances": 4,
+        "mem": 32,
+        "requirePorts": False,
+        "labels": {
+            "HAPROXY_GROUP": "external",
+            "HAPROXY_0_PORT": "10300",
+            "HAPROXY_0_VHOST": "nginx-docker-host.test",
+            "HAPROXY_0_ENABLED": "true"
+        },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
+        "fetch": [],
+        "constraints": [],
+        "portDefinitions": [
+            {
+                "protocol": "tcp",
+                "port": 0
+            }
+        ]
+    }
+
+@pytest.fixture(scope='session')
+def docker_ippc():
+    return {
+        "id": "/nginx-docker-ippc",
+        "user":"root",
+        "cmd": "echo 'nginx-docker-ippc' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
+        "cpus": 0.1,
+        "mem": 32,
+        "disk": 0,
+        "instances": 4,
+        "container": {
+            "type": "DOCKER",
+            "volumes": [],
+            "docker": {
+                "image": "nginx",
+                "parameters": []
+            },
+            "portMappings": [
+                {
+                    "containerPort": 80
+                }
+            ]
+        },
+        "requirePorts": False,
+        "labels": {
+            "HAPROXY_GROUP": "external",
+            "HAPROXY_0_PORT": "10200",
+            "HAPROXY_0_VHOST": "nginx-docker-ippc.test",
+            "HAPROXY_0_ENABLED": "true"
+        },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
+        "ipAddress": {
+            "groups": [],
+            "networkName": "dcos"
+        }
+    }
+
+@pytest.fixture(scope='session')
+def ucr_bridge():
+    return {
+        "id": "/nginx-ucr-bridge",
+        "user":"root",
+        "cmd": "echo 'nginx-ucr-bridge' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
+        "container": {
+            "portMappings": [
+                {
+                    "containerPort": 80,
+                    "hostPort": 0,
+                    "protocol": "tcp"
+                }
+            ],
+            "type": "MESOS",
+            "volumes": [],
+            "docker": {
+                "image": "nginx"
+            }
+        },
+        "cpus": 0.1,
+        "disk": 0,
+        "instances": 4,
+        "mem": 32,
+        "requirePorts": False,
+        "labels": {
+            "HAPROXY_GROUP": "external",
+            "HAPROXY_0_PORT": "10500",
+            "HAPROXY_0_VHOST": "nginx-ucr-bridge.test",
+            "HAPROXY_0_ENABLED": "true"
+        },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
+        "networks": [
+            {
+                "mode": "container/bridge"
+            }
+        ]
+    }
+
+@pytest.fixture(scope='session')
+def ucr_hort():
+    return {
+        "id": "/nginx-ucr-host",
+        "user":"root",
+        "backoffFactor": 1.15,
+        "backoffSeconds": 1,
+        "cmd": "sed -i \"s/80/${PORT0}/\" /etc/nginx/conf.d/default.conf; echo 'nginx-ucr-host' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
+        "container": {
+            "type": "MESOS",
+            "volumes": [],
+            "docker": {
+                "image": "nginx",
+                "forcePullImage": False,
+                "parameters": []
+            }
+        },
+        "cpus": 0.1,
+        "disk": 0,
+        "instances": 4,
+        "labels": {
+            "HAPROXY_GROUP": "external",
+            "HAPROXY_0_PORT": "10400",
+            "HAPROXY_0_VHOST": "nginx-ucr-host.test",
+            "HAPROXY_0_ENABLED": "true"
+        },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
+        "maxLaunchDelaySeconds": 3600,
+        "mem": 32,
+        "gpus": 0,
+        "networks": [
+            {
+                "mode": "host"
+            }
+        ],
+        "portDefinitions": [
+            {
+                "protocol": "tcp",
+                "port": 10003
+            }
+        ]
+    }
+
+@pytest.fixture(scope='session')
+def ucr_ippc():
+    return {
+        "id": "/nginx-ucr-ippc",
+        "user":"root",
+        "backoffFactor": 1.15,
+        "backoffSeconds": 1,
+        "cmd": "echo 'nginx-ucr-ippc' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
+        "container": {
+            "type": "MESOS",
+            "volumes": [],
+            "docker": {
+                "image": "nginx",
+                "forcePullImage": False,
+                "parameters": []
+            }
+        },
+        "cpus": 0.1,
+        "disk": 0,
+        "instances": 4,
+        "labels": {
+            "HAPROXY_GROUP": "external",
+            "HAPROXY_0_PORT": "10600",
+            "HAPROXY_0_VHOST": "nginx-ucr-ippc.test",
+            "HAPROXY_0_BACKEND_SERVER_OPTIONS": "  server {serverName} {host_ipv4}:80 {cookieOptions}{healthCheckOptions}{otherOptions}\n",
+            "HAPROXY_0_ENABLED": "true"
+        },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
+        "mem": 32,
+        "gpus": 0,
+        "networks": [
+            {
+                "name": "dcos",
+                "mode": "container"
+            }
+        ]
+    }
+
 
 @pytest.fixture(scope='session')
 def onprem_cluster(launcher):
@@ -239,6 +531,7 @@ def new_dcos_cli() -> Generator[dcos_cli.DcosCli, None, None]:
     cli.clear_cli_dir()
 
 @pytest.fixture(scope='session')
+@retrying.retry(wait_fixed=5000, stop_max_delay=60000)
 def dcoscli(
     new_dcos_cli: dcos_cli.DcosCli,
     dcos_api_session
@@ -332,63 +625,60 @@ def wait_for_frameworks_to_deploy(dcoscli):
     wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status deploy --json")
     wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status recovery --json")
 
+@retrying.retry(wait_fixed=5000, stop_max_delay=600000)
 def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
     """Takes a cli command to run, and waits for the json attribute 'status' to be 'COMPLETE'"""
-    cassandra_deploy_json_return_string = json.loads(
-        dcoscli.exec_command(cli_commands.split())[0])
+    cassandra_deploy_json_return_string = json.loads(dcoscli.exec_command(cli_commands.split())[0])
+    log.info("Waiting for '" + str(cli_commands).strip() + "' to complete deploying")
+    str(cassandra_deploy_json_return_string["status"]) == str("COMPLETE")
 
-    count = 0
-
-    while (str(cassandra_deploy_json_return_string["status"]) != str("COMPLETE") and count <= 120):
-        log.info("Waiting for '" + str(cli_commands).strip() + "' to complete deploying - Attempt: " + str(count))
-        time.sleep(5)
-        cassandra_deploy_json_return_string = json.loads(
-            dcoscli.exec_command(cli_commands.split())[0])
-        count += 1
-
+@retrying.retry(wait_fixed=5000, stop_max_delay=300000)
 def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
     """Takes a spark status name to run, and waits for the response to contain the 'state' of 'TASK RUNNING'"""
     driver_name = str(run_command_response[0])[str(run_command_response[0]).index('driver-'):]
-
     status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
+    log.info("Waiting for '" + str(driver_name).strip() + "' to complete deploying")
+    assert(''.join(status_command_response).find("state: TASK_RUNNING") != -1)
 
-    count = 0
-
-    while (''.join(status_command_response).find("state: TASK_RUNNING") == -1 and count <= 36):
-        log.info("Waiting for '" + str(driver_name).strip() + "' to complete deploying - Attempt: " + str(count))
-        time.sleep(5)
-        status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
-        count += 1
-
+@retrying.retry(wait_fixed=5000, stop_max_delay=300000)
 def wait_for_kafka_topic_to_start(dcoscli):
     """Takes a kafka topic, and waits for the topic to appear in kafka's topic list"""
     kafka_topic_list = str(dcoscli.exec_command("dcos kafka topic list".split()))
+    log.info("Waiting for the kafka topic 'mytopicC' to complete deploying")
+    assert(kafka_topic_list.find("mytopicC") != -1)
 
-    count = 0
-
-    while (kafka_topic_list.find("mytopicC") == -1 and count <= 60):
-        log.info("Waiting for the kafka topic 'mytopicC' to complete deploying - Attempt: " + str(count))
-        time.sleep(5)
-        kafka_topic_list = str(dcoscli.exec_command("dcos kafka topic list".split()))
-        count += 1
-
+@retrying.retry(wait_fixed=5000, stop_max_delay=300000)
 def wait_for_kafka_topic_to_start_counting(dcoscli):
     """waits for the kafka topic started by our spark jobs to begin counting words"""
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+    log.info("Waiting for the kafka topic 'mytopicC' to begin counting words")
+    assert(str(kafka_job_words) != "0")
 
-    count = 0
+def find_app_port(config, app_name):
+    """ Finds the port associated with the app in haproxy_getconfig.
+    This is done through regex pattern matching.
+    """
+    pattern = re.search(r'{0}(.+?)\n  bind .+:\d+'.format(app_name), config)
+    return pattern.group()[-5:]
 
-    log.info("Recieved: '" + kafka_job_words + "' which is equal to 0: '" + str(kafka_job_words) == "0" + "'")
+def spin_up_marathon_apps(superuser_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
+    app_defs = [docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc]
+    app_ids = []
 
-    while (str(kafka_job_words) == "0" and count <= 60):
-        log.info("Waiting for the kafka topic 'mytopicC' to begin counting words - Attempt: " + str(count))
-        time.sleep(5)
-        kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
-        count += 1
+    for app_def in app_defs:
+        app_id = app_def['id']
+        app_ids.append(app_id)
 
+        app_name = app_id[1:] if app_id[0] == '/' else app_id
+        log.info('{} is being tested.'.format(app_name))
+
+        superuser_api_session.marathon.deploy_app(app_def)
+        superuser_api_session.marathon.wait_for_deployments_complete
+
+    return app_ids
 
 @pytest.fixture(scope='session')
-def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
+def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
     if dcos_api_session.default_url.scheme == 'https':
         dcos_api_session.set_ca_cert()
     dcos_api_session.wait_for_dcos()
@@ -403,7 +693,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     services = {
         'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
         'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
-        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None}
+        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None},
+        'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
     }
 
     #Installing the frameworks
@@ -415,6 +706,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
 
     # Waiting for deployments to complete.
     dcos_api_session.marathon.wait_for_deployments_complete()
+    for package in framework_ids.keys():
+        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
     log.info("Completed installing required services.")
 
     #Install our various CLIs
@@ -422,25 +715,29 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     dcoscli.exec_command("dcos package install kafka --cli --yes".split())
     dcoscli.exec_command("dcos package install spark --cli --yes".split())
 
-    wait_for_frameworks_to_deploy(dcoscli)
+    # wait_for_frameworks_to_deploy(dcoscli)
 
     # Run our two spark jobs to exercise all three of our frameworks
-    spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
-    wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
+    # spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
+    # wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
 
-    spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
-    wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
+    # spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
+    # wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
     # Checking whether applications are running without errors.
     for package in framework_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
+    kafka_job_words = 0
+
     # Wait for the kafka topic to show up in kafka's topic list, and then wait for the topic to begin producing the word count
-    wait_for_kafka_topic_to_start(dcoscli)
-    wait_for_kafka_topic_to_start_counting(dcoscli)
+    # wait_for_kafka_topic_to_start(dcoscli)
+    # wait_for_kafka_topic_to_start_counting(dcoscli)
 
     # Preserve the current quantity of words from the Kafka job so we can compare it later
-    kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+    # kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+
+    marathon_app_ids = spin_up_marathon_apps(dcos_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc)
 
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
@@ -486,7 +783,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     # See this issue for why we check for a difference:
     # https://issues.apache.org/jira/browse/MESOS-1718
     task_state_start = get_master_task_state(dcos_api_session, tasks_start[test_app_ids[0]][0])
-    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids
+    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids
 
 
 @pytest.fixture(scope='session')
@@ -600,7 +897,7 @@ class TestUpgrade:
                 failures='\n'.join(dns_failure_times))
 
     def test_cassandra_tasks_survive(self, dcos_api_session, setup_workload, dcoscli):
-        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids = setup_workload
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, _ = setup_workload
 
         # Checking whether applications are running without errors.
         for package in framework_ids.keys():
@@ -610,3 +907,12 @@ class TestUpgrade:
         kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
         assert kafka_job_words_post_upgrade > kafka_job_words
+
+    def test_marathonlb_apps_survived(self, dcos_api_session, setup_workload):
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
+
+        log.info("Every marathon instance we attempted to run: '" + str(marathon_app_ids) + "'")
+
+        for marathon_app in marathon_app_ids:
+            assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, False)
+

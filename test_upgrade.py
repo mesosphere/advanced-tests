@@ -718,24 +718,22 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     # wait_for_frameworks_to_deploy(dcoscli)
 
     # Run our two spark jobs to exercise all three of our frameworks
-    # spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
-    # wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
+    spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
+    wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
 
-    # spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
-    # wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
+    spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
+    wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
     # Checking whether applications are running without errors.
     for package in framework_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
-    kafka_job_words = 0
-
     # Wait for the kafka topic to show up in kafka's topic list, and then wait for the topic to begin producing the word count
-    # wait_for_kafka_topic_to_start(dcoscli)
-    # wait_for_kafka_topic_to_start_counting(dcoscli)
+    wait_for_kafka_topic_to_start(dcoscli)
+    wait_for_kafka_topic_to_start_counting(dcoscli)
 
     # Preserve the current quantity of words from the Kafka job so we can compare it later
-    # kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+    kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
     marathon_app_ids = spin_up_marathon_apps(dcos_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc)
 
@@ -903,7 +901,7 @@ class TestUpgrade:
         for package in framework_ids.keys():
             assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
-    # Get a new word count from kafka to compare to the word count from before the upgrade
+        # Get a new word count from kafka to compare to the word count from before the upgrade
         kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
         assert kafka_job_words_post_upgrade > kafka_job_words

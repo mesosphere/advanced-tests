@@ -221,7 +221,7 @@ def dcos_api_session(onprem_cluster, launcher, is_enterprise):
 
 
 def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, security_mode=None):
-    ssl_enabled = security_mode in ('strict', 'permissive')
+#    ssl_enabled = security_mode in ('strict', 'permissive')
     args = {
         'dcos_url': 'http://' + onprem_cluster.masters[0].public_ip,
         'masters': [m.public_ip for m in onprem_cluster.masters],

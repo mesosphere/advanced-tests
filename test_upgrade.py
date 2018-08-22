@@ -236,7 +236,7 @@ def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, s
             os.getenv('DCOS_LOGIN_UNAME', 'bootstrapuser'),
             os.getenv('DCOS_LOGIN_PW', 'deleteme'))
         if ssl_enabled:
-            args['dcos_url'] = args['dcos_url'].replace('http', 'https')
+#            args['dcos_url'] = args['dcos_url'].replace('http', 'https')
     else:
         api_class = dcos_api.DcosApiSession
 

@@ -26,6 +26,7 @@ import math
 import os
 import pprint
 import re
+import time
 import uuid
 from typing import Generator
 
@@ -897,6 +898,8 @@ class TestUpgrade:
     def test_cassandra_tasks_survive(self, upgraded_dcos, dcos_api_session, setup_workload, dcoscli):
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
+        dcos_api_session.marathon.wait_for_deployments_complete()
+
         # Checking whether applications are running without errors.
         for package in framework_ids.keys():
             assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
@@ -909,8 +912,12 @@ class TestUpgrade:
     def test_marathonlb_apps_survived(self, upgraded_dcos, dcos_api_session, setup_workload):
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
+        dcos_api_session.marathon.wait_for_deployments_complete()
+
         log.info("Every marathon instance we attempted to run: '" + str(marathon_app_ids) + "'")
 
         for marathon_app in marathon_app_ids:
             assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, False)
+
+        time.sleep(30000)
 

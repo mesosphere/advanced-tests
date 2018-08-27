@@ -715,7 +715,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     dcoscli.exec_command("dcos package install kafka --cli --yes".split())
     dcoscli.exec_command("dcos package install spark --cli --yes".split())
 
-    # wait_for_frameworks_to_deploy(dcoscli)
+    wait_for_frameworks_to_deploy(dcoscli)
 
     # Run our two spark jobs to exercise all three of our frameworks
     spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
@@ -849,7 +849,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
 class TestUpgrade:
     def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload):
-        test_app_ids, test_pod_ids, tasks_start, _ = setup_workload
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
         app_tasks_end = {app_id: sorted(app_task_ids(upgraded_dcos, app_id)) for app_id in test_app_ids}
         tasks_end = {**app_tasks_end}
         if use_pods:
@@ -875,7 +875,7 @@ class TestUpgrade:
             else:
                 return subset == superset
 
-        test_app_ids, test_pod_ids, tasks_start, task_state_start = setup_workload
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
         task_state_end = get_master_task_state(upgraded_dcos, tasks_start[test_app_ids[0]][0])
         assert is_contained(task_state_start, task_state_end), '{}\n\n{}'.format(task_state_start, task_state_end)
 
@@ -894,8 +894,8 @@ class TestUpgrade:
                 hostname=dns_app['env']['RESOLVE_NAME'],
                 failures='\n'.join(dns_failure_times))
 
-    def test_cassandra_tasks_survive(self, dcos_api_session, setup_workload, dcoscli):
-        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, _ = setup_workload
+    def test_cassandra_tasks_survive(self, upgraded_dcos, dcos_api_session, setup_workload, dcoscli):
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
         # Checking whether applications are running without errors.
         for package in framework_ids.keys():
@@ -906,7 +906,7 @@ class TestUpgrade:
 
         assert kafka_job_words_post_upgrade > kafka_job_words
 
-    def test_marathonlb_apps_survived(self, dcos_api_session, setup_workload):
+    def test_marathonlb_apps_survived(self, upgraded_dcos, dcos_api_session, setup_workload):
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
         log.info("Every marathon instance we attempted to run: '" + str(marathon_app_ids) + "'")

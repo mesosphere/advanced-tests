@@ -902,7 +902,7 @@ class TestUpgrade:
 
         # Checking whether applications are running without errors.
         for package in framework_ids.keys():
-            assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
+            assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, True) is True
 
         # Get a new word count from kafka to compare to the word count from before the upgrade
         kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
@@ -917,8 +917,5 @@ class TestUpgrade:
         for marathon_app in marathon_app_ids:
             log.info("Testing for maintained running of: " + marathon_app)
 
-            dcos_api_session.marathon.wait_for_app_deployment(marathon_app, 4, True, False, 120)
+            dcos_api_session.marathon.wait_for_app_deployment(marathon_app, 4, True, False, 300)
             assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, False)
-
-        time.sleep(300000)
-

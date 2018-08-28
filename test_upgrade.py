@@ -907,7 +907,7 @@ class TestUpgrade:
         # Get a new word count from kafka to compare to the word count from before the upgrade
         kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
-        assert kafka_job_words_post_upgrade > kafka_job_words
+        assert int(kafka_job_words_post_upgrade) > int(kafka_job_words)
 
     def test_marathonlb_apps_survived(self, upgraded_dcos, dcos_api_session, setup_workload):
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload

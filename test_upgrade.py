@@ -673,8 +673,15 @@ def spin_up_marathon_apps(superuser_api_session, docker_bridge, docker_host, doc
         app_name = app_id[1:] if app_id[0] == '/' else app_id
         log.info('{} is being tested.'.format(app_name))
 
-        superuser_api_session.marathon.deploy_app(app_def)
-        superuser_api_session.marathon.wait_for_deployments_complete
+        try:
+            superuser_api_session.marathon.deploy_app(app_def)
+            superuser_api_session.marathon.wait_for_deployments_complete
+        except AssertionError:
+            log.info('Install of ' + app_id + ' failed, retrying the install...')
+            superuser_api_session.marathon.destroy_app(app_id)
+
+            superuser_api_session.marathon.deploy_app(app_def)
+            superuser_api_session.marathon.wait_for_deployments_complete
 
     return app_ids
 
@@ -719,11 +726,23 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     wait_for_frameworks_to_deploy(dcoscli)
 
     # Run our two spark jobs to exercise all three of our frameworks
-    spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
-    wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
+    try:
+        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
+        wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
+    except AssertionError:
+        driver_name = str(spark_producer_response[0])[str(spark_producer_response[0]).index('driver-'):]
+        dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
+        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
+        wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
 
-    spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
-    wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
+    try:
+        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
+        wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
+    except AssertionError:
+        driver_name = str(spark_producer_response[0])[str(spark_producer_response[0]).index('driver-'):]
+        dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
+        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
+        wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
     # Checking whether applications are running without errors.
     for package in framework_ids.keys():
@@ -851,6 +870,10 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 class TestUpgrade:
     def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload):
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
+
+        for test_app in test_app_ids:
+            dcos_api_session.marathon.wait_for_app_deployment(test_app, 1, True, False, 300)
+
         app_tasks_end = {app_id: sorted(app_task_ids(upgraded_dcos, app_id)) for app_id in test_app_ids}
         tasks_end = {**app_tasks_end}
         if use_pods:

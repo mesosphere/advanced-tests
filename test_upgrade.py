@@ -868,7 +868,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
 
 class TestUpgrade:
-    def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload):
+    def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload, dcos_api_session):
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
         for test_app in test_app_ids:

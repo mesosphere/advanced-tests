@@ -872,7 +872,7 @@ class TestUpgrade:
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
         for test_app in test_app_ids:
-            dcos_api_session.marathon.wait_for_app_deployment(test_app, 1, True, False, 300)
+            dcos_api_session.marathon.wait_for_app_deployment(test_app, 1, False, False, 300)
 
         app_tasks_end = {app_id: sorted(app_task_ids(upgraded_dcos, app_id)) for app_id in test_app_ids}
         tasks_end = {**app_tasks_end}

@@ -739,7 +739,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
         spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
     except AssertionError:
-        driver_name = str(spark_producer_response[0])[str(spark_producer_response[0]).index('driver-'):]
+        driver_name = str(spark_consumer_response[0])[str(spark_consumer_response[0]).index('driver-'):]
         dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
         spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)

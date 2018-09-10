@@ -456,7 +456,7 @@ class TestUpgrade:
             dns_app_task['id'],
             dns_app['env']['DNS_LOG_FILENAME']))
         dns_failure_times = [entry[0] for entry in dns_log if entry[1] != 'SUCCESS']
-        assert len(dns_failure_times) >= 180, 'Failed to resolve Marathon app hostname {hostname} at least once' \
+        assert len(dns_failure_times) <= 180, 'Failed to resolve Marathon app hostname {hostname} at least once' \
             'Hostname failed to resolve at these times:\n{failures}'.format(
                 hostname=dns_app['env']['RESOLVE_NAME'],
                 failures='\n'.join(dns_failure_times))

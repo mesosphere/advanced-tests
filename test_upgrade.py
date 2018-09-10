@@ -22,556 +22,19 @@ Optional
 import copy
 import json
 import logging
-import math
 import os
 import pprint
-import re
-import time
-import uuid
-from typing import Generator
 
+import math
 import pytest
-import requests
 import retrying
 import yaml
 
 import upgrade
-from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
-from dcos_test_utils.enterprise import EnterpriseApiSession
+from conftest import wait_for_dns, make_dcos_api_session
+from json_job_definitions import spark_consumer_job, spark_producer_job
 
 log = logging.getLogger(__name__)
-
-
-TEST_APP_NAME_FMT = 'upgrade-{}'
-
-
-@pytest.fixture(scope='session')
-def viplisten_app():
-    return {
-        "id": '/' + TEST_APP_NAME_FMT.format('viplisten-' + uuid.uuid4().hex),
-        "cmd": '/usr/bin/nc -l -p $PORT0',
-        "cpus": 0.1,
-        "mem": 32,
-        "instances": 1,
-        "container": {
-            "type": "MESOS",
-            "docker": {
-              "image": "alpine:3.5"
-            }
-        },
-        'portDefinitions': [{
-            'labels': {
-                'VIP_0': '/viplisten:5000'
-            }
-        }],
-        "healthChecks": [{
-            "protocol": "COMMAND",
-            "command": {
-                "value": "/usr/bin/nslookup viplisten.marathon.l4lb.thisdcos.directory && pgrep -x /usr/bin/nc"
-            },
-            "gracePeriodSeconds": 300,
-            "intervalSeconds": 60,
-            "timeoutSeconds": 20,
-            "maxConsecutiveFailures": 10
-        }]
-    }
-
-
-@pytest.fixture(scope='session')
-def viptalk_app():
-    return {
-        "id": '/' + TEST_APP_NAME_FMT.format('viptalk-' + uuid.uuid4().hex),
-        "cmd": "/usr/bin/nc viplisten.marathon.l4lb.thisdcos.directory 5000 < /dev/zero",
-        "cpus": 0.1,
-        "mem": 32,
-        "instances": 1,
-        "container": {
-            "type": "MESOS",
-            "docker": {
-              "image": "alpine:3.5"
-            }
-        },
-        "healthChecks": [{
-            "protocol": "COMMAND",
-            "command": {
-                "value": "pgrep -x /usr/bin/nc && sleep 5 && pgrep -x /usr/bin/nc"
-            },
-            "gracePeriodSeconds": 300,
-            "intervalSeconds": 60,
-            "timeoutSeconds": 20,
-            "maxConsecutiveFailures": 10
-        }]
-    }
-
-
-@pytest.fixture(scope='session')
-def healthcheck_app():
-    # HTTP healthcheck app to make sure tasks are reachable during the upgrade.
-    # If a task fails its healthcheck, Marathon will terminate it and we'll
-    # notice it was killed when we check tasks on exit.
-    return {
-        "id": '/' + TEST_APP_NAME_FMT.format('healthcheck-' + uuid.uuid4().hex),
-        "cmd": "python3 -m http.server 8080",
-        "cpus": 0.5,
-        "mem": 32.0,
-        "instances": 1,
-        "container": {
-            "type": "DOCKER",
-            "docker": {
-                "image": "python:3",
-                "network": "BRIDGE",
-                "portMappings": [
-                    {"containerPort": 8080, "hostPort": 0}
-                ]
-            }
-        },
-        "healthChecks": [
-            {
-                "protocol": "HTTP",
-                "path": "/",
-                "portIndex": 0,
-                "gracePeriodSeconds": 300,
-                "intervalSeconds": 60,
-                "timeoutSeconds": 20,
-                "maxConsecutiveFailures": 10
-            }
-        ],
-    }
-
-
-@pytest.fixture(scope='session')
-def dns_app(healthcheck_app):
-    # DNS resolution app to make sure DNS is available during the upgrade.
-    # Periodically resolves the healthcheck app's domain name and logs whether
-    # it succeeded to a file in the Mesos sandbox.
-    healthcheck_app_id = healthcheck_app['id'].lstrip('/')
-    return {
-        "id": '/' + TEST_APP_NAME_FMT.format('dns-' + uuid.uuid4().hex),
-        "cmd": """
-while true
-do
-    printf "%s " $(date --utc -Iseconds) >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
-    if host -W $TIMEOUT_SECONDS $RESOLVE_NAME
-    then
-        echo SUCCESS >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
-    else
-        echo FAILURE >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
-    fi
-    sleep $INTERVAL_SECONDS
-done
-""",
-        "env": {
-            'RESOLVE_NAME': helpers.marathon_app_id_to_mesos_dns_subdomain(healthcheck_app_id) + '.marathon.mesos',
-            'DNS_LOG_FILENAME': 'dns_resolve_log.txt',
-            'INTERVAL_SECONDS': '1',
-            'TIMEOUT_SECONDS': '1',
-        },
-        "cpus": 0.5,
-        "mem": 32.0,
-        "instances": 1,
-        "container": {
-            "type": "DOCKER",
-            "docker": {
-                "image": "branden/bind-utils",
-                "network": "BRIDGE",
-            }
-        },
-        "dependencies": [healthcheck_app_id],
-    }
-
-
-@pytest.fixture(scope='session')
-def docker_pod():
-    return {
-        'id': '/' + TEST_APP_NAME_FMT.format('docker-pod-' + uuid.uuid4().hex),
-        'scaling': {'kind': 'fixed', 'instances': 1},
-        'environment': {'PING': 'PONG'},
-        'containers': [
-            {
-                'name': 'container1',
-                'resources': {'cpus': 0.1, 'mem': 32},
-                'image': {'kind': 'DOCKER', 'id': 'debian:jessie'},
-                'exec': {'command': {'shell': 'while true; do sleep 1; done'}},
-                'healthcheck': {'command': {'shell': 'sleep 1'}}
-            },
-            {
-                'name': 'container2',
-                'resources': {'cpus': 0.1, 'mem': 32},
-                'exec': {'command': {'shell': 'echo $PING > foo; while true; do sleep 1; done'}},
-                'healthcheck': {'command': {'shell': 'test $PING = `cat foo`'}}
-            }
-        ],
-        'networks': [{'mode': 'host'}]
-    }
-
-@pytest.fixture(scope='session')
-def spark_producer_job():
-    return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=2 --conf spark.executor.cores=2 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --class KafkaRandomFeeder http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar --appName Producer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --numberOfWords 3600 --wordsPerSecond 1"'
-
-@pytest.fixture(scope='session')
-def spark_consumer_job():
-    return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=1 --conf spark.executor.cores=1 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory --conf spark.cassandra.connection.port=9042 --class KafkaWordCount http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar --appName Consumer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --groupId group1 --batchSizeSeconds 10 --cassandraKeyspace mykeyspace --cassandraTable mytable"'
-
-@pytest.fixture(scope='session')
-def docker_bridge():
-    return {
-        "id": "/nginx-docker-bridge",
-        "user": "root",
-        "cmd": "echo 'nginx-docker-bridge' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
-        "container": {
-            "portMappings": [
-                {
-                    "containerPort": 80,
-                    "hostPort": 0,
-                    "protocol": "tcp"
-                }
-            ],
-            "type": "DOCKER",
-            "volumes": [],
-            "docker": {
-                "image": "nginx"
-            }
-        },
-        "cpus": 0.1,
-        "instances": 4,
-        "labels": {
-            "HAPROXY_GROUP": "external",
-            "HAPROXY_0_PORT": "10100",
-            "HAPROXY_0_VHOST": "nginx-docker-bridge.test",
-            "HAPROXY_0_ENABLED": "true"
-        },
-        "healthChecks": [
-            {
-                "protocol": "HTTP",
-                "path": "/",
-                "portIndex": 0,
-                "gracePeriodSeconds": 300,
-                "intervalSeconds": 60,
-                "timeoutSeconds": 20,
-                "maxConsecutiveFailures": 10
-            }
-        ],
-        "mem": 32,
-        "networks": [
-            {
-                "mode": "container/bridge"
-            }
-        ],
-        "requirePorts": False
-    }
-
-@pytest.fixture(scope='session')
-def docker_host():
-    return {
-        "id": "/nginx-docker-host",
-        "user":"root",
-        "cmd": "sed -i \"s/80/${PORT0}/\" /etc/nginx/conf.d/default.conf; echo 'nginx-docker-host' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
-        "container": {
-            "type": "DOCKER",
-            "volumes": [],
-            "docker": {
-                "image": "nginx",
-                "network": "HOST"
-            }
-        },
-        "cpus": 0.1,
-        "disk": 0,
-        "instances": 4,
-        "mem": 32,
-        "requirePorts": False,
-        "labels": {
-            "HAPROXY_GROUP": "external",
-            "HAPROXY_0_PORT": "10300",
-            "HAPROXY_0_VHOST": "nginx-docker-host.test",
-            "HAPROXY_0_ENABLED": "true"
-        },
-        "healthChecks": [
-            {
-                "protocol": "HTTP",
-                "path": "/",
-                "portIndex": 0,
-                "gracePeriodSeconds": 300,
-                "intervalSeconds": 60,
-                "timeoutSeconds": 20,
-                "maxConsecutiveFailures": 10
-            }
-        ],
-        "fetch": [],
-        "constraints": [],
-        "portDefinitions": [
-            {
-                "protocol": "tcp",
-                "port": 0
-            }
-        ]
-    }
-
-@pytest.fixture(scope='session')
-def docker_ippc():
-    return {
-        "id": "/nginx-docker-ippc",
-        "user":"root",
-        "cmd": "echo 'nginx-docker-ippc' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
-        "cpus": 0.1,
-        "mem": 32,
-        "disk": 0,
-        "instances": 4,
-        "container": {
-            "type": "DOCKER",
-            "volumes": [],
-            "docker": {
-                "image": "nginx",
-                "parameters": []
-            },
-            "portMappings": [
-                {
-                    "containerPort": 80
-                }
-            ]
-        },
-        "requirePorts": False,
-        "labels": {
-            "HAPROXY_GROUP": "external",
-            "HAPROXY_0_PORT": "10200",
-            "HAPROXY_0_VHOST": "nginx-docker-ippc.test",
-            "HAPROXY_0_ENABLED": "true"
-        },
-        "healthChecks": [
-            {
-                "protocol": "HTTP",
-                "path": "/",
-                "portIndex": 0,
-                "gracePeriodSeconds": 300,
-                "intervalSeconds": 60,
-                "timeoutSeconds": 20,
-                "maxConsecutiveFailures": 10
-            }
-        ],
-        "ipAddress": {
-            "groups": [],
-            "networkName": "dcos"
-        }
-    }
-
-@pytest.fixture(scope='session')
-def ucr_bridge():
-    return {
-        "id": "/nginx-ucr-bridge",
-        "user":"root",
-        "cmd": "echo 'nginx-ucr-bridge' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
-        "container": {
-            "portMappings": [
-                {
-                    "containerPort": 80,
-                    "hostPort": 0,
-                    "protocol": "tcp"
-                }
-            ],
-            "type": "MESOS",
-            "volumes": [],
-            "docker": {
-                "image": "nginx"
-            }
-        },
-        "cpus": 0.1,
-        "disk": 0,
-        "instances": 4,
-        "mem": 32,
-        "requirePorts": False,
-        "labels": {
-            "HAPROXY_GROUP": "external",
-            "HAPROXY_0_PORT": "10500",
-            "HAPROXY_0_VHOST": "nginx-ucr-bridge.test",
-            "HAPROXY_0_ENABLED": "true"
-        },
-        "healthChecks": [
-            {
-                "protocol": "HTTP",
-                "path": "/",
-                "portIndex": 0,
-                "gracePeriodSeconds": 300,
-                "intervalSeconds": 60,
-                "timeoutSeconds": 20,
-                "maxConsecutiveFailures": 10
-            }
-        ],
-        "networks": [
-            {
-                "mode": "container/bridge"
-            }
-        ]
-    }
-
-@pytest.fixture(scope='session')
-def ucr_hort():
-    return {
-        "id": "/nginx-ucr-host",
-        "user":"root",
-        "backoffFactor": 1.15,
-        "backoffSeconds": 1,
-        "cmd": "sed -i \"s/80/${PORT0}/\" /etc/nginx/conf.d/default.conf; echo 'nginx-ucr-host' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
-        "container": {
-            "type": "MESOS",
-            "volumes": [],
-            "docker": {
-                "image": "nginx",
-                "forcePullImage": False,
-                "parameters": []
-            }
-        },
-        "cpus": 0.1,
-        "disk": 0,
-        "instances": 4,
-        "labels": {
-            "HAPROXY_GROUP": "external",
-            "HAPROXY_0_PORT": "10400",
-            "HAPROXY_0_VHOST": "nginx-ucr-host.test",
-            "HAPROXY_0_ENABLED": "true"
-        },
-        "healthChecks": [
-            {
-                "protocol": "HTTP",
-                "path": "/",
-                "portIndex": 0,
-                "gracePeriodSeconds": 300,
-                "intervalSeconds": 60,
-                "timeoutSeconds": 20,
-                "maxConsecutiveFailures": 10
-            }
-        ],
-        "maxLaunchDelaySeconds": 3600,
-        "mem": 32,
-        "gpus": 0,
-        "networks": [
-            {
-                "mode": "host"
-            }
-        ],
-        "portDefinitions": [
-            {
-                "protocol": "tcp",
-                "port": 10003
-            }
-        ]
-    }
-
-@pytest.fixture(scope='session')
-def ucr_ippc():
-    return {
-        "id": "/nginx-ucr-ippc",
-        "user":"root",
-        "backoffFactor": 1.15,
-        "backoffSeconds": 1,
-        "cmd": "echo 'nginx-ucr-ippc' > /usr/share/nginx/html/index.html; nginx -g 'daemon off;'",
-        "container": {
-            "type": "MESOS",
-            "volumes": [],
-            "docker": {
-                "image": "nginx",
-                "forcePullImage": False,
-                "parameters": []
-            }
-        },
-        "cpus": 0.1,
-        "disk": 0,
-        "instances": 4,
-        "labels": {
-            "HAPROXY_GROUP": "external",
-            "HAPROXY_0_PORT": "10600",
-            "HAPROXY_0_VHOST": "nginx-ucr-ippc.test",
-            "HAPROXY_0_BACKEND_SERVER_OPTIONS": "  server {serverName} {host_ipv4}:80 {cookieOptions}{healthCheckOptions}{otherOptions}\n",
-            "HAPROXY_0_ENABLED": "true"
-        },
-        "healthChecks": [
-            {
-                "protocol": "HTTP",
-                "path": "/",
-                "portIndex": 0,
-                "gracePeriodSeconds": 300,
-                "intervalSeconds": 60,
-                "timeoutSeconds": 20,
-                "maxConsecutiveFailures": 10
-            }
-        ],
-        "mem": 32,
-        "gpus": 0,
-        "networks": [
-            {
-                "name": "dcos",
-                "mode": "container"
-            }
-        ]
-    }
-
-
-@pytest.fixture(scope='session')
-def onprem_cluster(launcher):
-    if launcher.config['provider'] != 'onprem':
-        pytest.skip('Only onprem provider is supported for upgrades!')
-    return launcher.get_onprem_cluster()
-
-
-@pytest.fixture(scope='session')
-def is_enterprise():
-    return os.getenv('TEST_UPGRADE_ENTERPRISE', 'false') == 'true'
-
-
-@pytest.fixture(scope='session')
-def dcos_api_session(onprem_cluster, launcher, is_enterprise):
-    """ The API session for the cluster at the beginning of the upgrade
-    This will be used to start tasks and poll the metrics snapshot endpoint
-    """
-    return make_dcos_api_session(
-        onprem_cluster, launcher, is_enterprise, launcher.config['dcos_config'].get('security'))
-
-@pytest.fixture(scope='session')
-def new_dcos_cli() -> Generator[dcos_cli.DcosCli, None, None]:
-    cli = dcos_cli.DcosCli.new_cli()
-    yield cli
-    os.remove(cli.path)
-    cli.clear_cli_dir()
-
-@pytest.fixture(scope='session')
-@retrying.retry(wait_fixed=5000, stop_max_delay=60000)
-def dcoscli(
-    new_dcos_cli: dcos_cli.DcosCli,
-    dcos_api_session
-) -> dcos_cli.DcosCli:
-    new_dcos_cli.setup_enterprise(str(dcos_api_session.default_url))
-    return new_dcos_cli
-
-
-def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, security_mode=None):
-    ssl_enabled = security_mode in ('strict', 'permissive')
-    args = {
-        'dcos_url': 'http://' + onprem_cluster.masters[0].public_ip,
-        'masters': [m.public_ip for m in onprem_cluster.masters],
-        'slaves': [m.public_ip for m in onprem_cluster.private_agents],
-        'public_slaves': [m.public_ip for m in onprem_cluster.public_agents],
-        'auth_user': dcos_api.DcosUser(helpers.CI_CREDENTIALS),
-        'exhibitor_admin_password': launcher.config['dcos_config'].get('exhibitor_admin_password')}
-
-    if is_enterprise:
-        api_class = enterprise.EnterpriseApiSession
-        args['auth_user'] = enterprise.EnterpriseUser(
-            os.getenv('DCOS_LOGIN_UNAME', 'bootstrapuser'),
-            os.getenv('DCOS_LOGIN_PW', 'deleteme'))
-        if ssl_enabled:
-            args['dcos_url'] = args['dcos_url'].replace('http', 'https')
-    else:
-        api_class = dcos_api.DcosApiSession
-
-    return api_class(**args)
-
-
-@retrying.retry(
-    wait_fixed=(1 * 1000),
-    stop_max_delay=(120 * 1000),
-    retry_on_result=lambda x: not x)
-def wait_for_dns(dcos_api_session, hostname):
-    """Return True if Mesos-DNS has at least one entry for hostname."""
-    hosts = dcos_api_session.get('/mesos_dns/v1/hosts/' + hostname).json()
-    return any(h['host'] != '' and h['ip'] != '' for h in hosts)
 
 
 def get_master_task_state(dcos_api_session, task_id):
@@ -619,6 +82,7 @@ def parse_dns_log(dns_log_content):
 def use_pods():
     return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
+
 def wait_for_frameworks_to_deploy(dcoscli):
     """Waits for cassandra and kafka to finish deploying"""
     wait_for_individual_framework_to_deploy(dcoscli, "dcos cassandra plan status deploy --json")
@@ -626,12 +90,14 @@ def wait_for_frameworks_to_deploy(dcoscli):
     wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status deploy --json")
     wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status recovery --json")
 
+
 @retrying.retry(wait_fixed=5000, stop_max_delay=600000)
 def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
     """Takes a cli command to run, and waits for the json attribute 'status' to be 'COMPLETE'"""
     cassandra_deploy_json_return_string = json.loads(dcoscli.exec_command(cli_commands.split())[0])
     log.info("Waiting for '" + str(cli_commands).strip() + "' to complete deploying")
     str(cassandra_deploy_json_return_string["status"]) == str("COMPLETE")
+
 
 @retrying.retry(wait_fixed=5000, stop_max_delay=300000)
 def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
@@ -641,12 +107,14 @@ def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
     log.info("Waiting for '" + str(driver_name).strip() + "' to complete deploying")
     assert(''.join(status_command_response).find("state: TASK_RUNNING") != -1)
 
+
 @retrying.retry(wait_fixed=5000, stop_max_delay=300000)
 def wait_for_kafka_topic_to_start(dcoscli):
     """Takes a kafka topic, and waits for the topic to appear in kafka's topic list"""
     kafka_topic_list = str(dcoscli.exec_command("dcos kafka topic list".split()))
     log.info("Waiting for the kafka topic 'mytopicC' to complete deploying")
     assert(kafka_topic_list.find("mytopicC") != -1)
+
 
 @retrying.retry(wait_fixed=5000, stop_max_delay=300000)
 def wait_for_kafka_topic_to_start_counting(dcoscli):
@@ -655,12 +123,6 @@ def wait_for_kafka_topic_to_start_counting(dcoscli):
     log.info("Waiting for the kafka topic 'mytopicC' to begin counting words")
     assert(str(kafka_job_words) != "0")
 
-def find_app_port(config, app_name):
-    """ Finds the port associated with the app in haproxy_getconfig.
-    This is done through regex pattern matching.
-    """
-    pattern = re.search(r'{0}(.+?)\n  bind .+:\d+'.format(app_name), config)
-    return pattern.group()[-5:]
 
 def spin_up_marathon_apps(superuser_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
     app_defs = [docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc]
@@ -685,6 +147,7 @@ def spin_up_marathon_apps(superuser_api_session, docker_bridge, docker_host, doc
 
     return app_ids
 
+
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
     if dcos_api_session.default_url.scheme == 'https':
@@ -705,7 +168,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
         'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
     }
 
-    #Installing the frameworks
+    # Installing the frameworks
     for package, config in services.items():
         installed_package = dcos_api_session.cosmos.install_package(package, config['version'], config['option'])
         log.info("Installing {0} {1}".format(package, config['version'] or "(most recent version)"))
@@ -718,7 +181,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
         assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
     log.info("Completed installing required services.")
 
-    #Install our various CLIs
+    # Install our various CLIs
     dcoscli.exec_command("dcos package install cassandra --cli --yes".split())
     dcoscli.exec_command("dcos package install kafka --cli --yes".split())
     dcoscli.exec_command("dcos package install spark --cli --yes".split())
@@ -748,7 +211,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     for package in framework_ids.keys():
         assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
-    # Wait for the kafka topic to show up in kafka's topic list, and then wait for the topic to begin producing the word count
+    # Wait for the kafka topic to show up in kafka's topic list,
+    # and then wait for the topic to begin producing the word count
     wait_for_kafka_topic_to_start(dcoscli)
     wait_for_kafka_topic_to_start_counting(dcoscli)
 

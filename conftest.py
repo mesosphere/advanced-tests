@@ -2,6 +2,12 @@ import json
 import logging
 import os
 import time
+import re
+from typing import Generator
+
+import retrying
+
+from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
 
 import pytest
 
@@ -96,3 +102,82 @@ def launcher(create_cluster, cluster_info_path):
                 'Cluster creation was not specified with TEST_CREATE_CLUSTER, yet launcher '
                 'cannot reach the speficied cluster')
     return launcher
+
+@pytest.fixture(scope='session')
+def onprem_cluster(launcher):
+    if launcher.config['provider'] != 'onprem':
+        pytest.skip('Only onprem provider is supported for upgrades!')
+    return launcher.get_onprem_cluster()
+
+
+@pytest.fixture(scope='session')
+def is_enterprise():
+    return os.getenv('TEST_UPGRADE_ENTERPRISE', 'false') == 'true'
+
+
+@pytest.fixture(scope='session')
+def dcos_api_session(onprem_cluster, launcher, is_enterprise):
+    """ The API session for the cluster at the beginning of the upgrade
+    This will be used to start tasks and poll the metrics snapshot endpoint
+    """
+    return make_dcos_api_session(
+        onprem_cluster, launcher, is_enterprise, launcher.config['dcos_config'].get('security'))
+
+
+@pytest.fixture(scope='session')
+def new_dcos_cli() -> Generator[dcos_cli.DcosCli, None, None]:
+    cli = dcos_cli.DcosCli.new_cli()
+    yield cli
+    os.remove(cli.path)
+    cli.clear_cli_dir()
+
+
+@pytest.fixture(scope='session')
+@retrying.retry(wait_fixed=5000, stop_max_delay=60000)
+def dcoscli(
+    new_dcos_cli: dcos_cli.DcosCli,
+    dcos_api_session
+) -> dcos_cli.DcosCli:
+    new_dcos_cli.setup_enterprise(str(dcos_api_session.default_url))
+    return new_dcos_cli
+
+
+def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, security_mode=None):
+    ssl_enabled = security_mode in ('strict', 'permissive')
+    args = {
+        'dcos_url': 'http://' + onprem_cluster.masters[0].public_ip,
+        'masters': [m.public_ip for m in onprem_cluster.masters],
+        'slaves': [m.public_ip for m in onprem_cluster.private_agents],
+        'public_slaves': [m.public_ip for m in onprem_cluster.public_agents],
+        'auth_user': dcos_api.DcosUser(helpers.CI_CREDENTIALS),
+        'exhibitor_admin_password': launcher.config['dcos_config'].get('exhibitor_admin_password')}
+
+    if is_enterprise:
+        api_class = enterprise.EnterpriseApiSession
+        args['auth_user'] = enterprise.EnterpriseUser(
+            os.getenv('DCOS_LOGIN_UNAME', 'bootstrapuser'),
+            os.getenv('DCOS_LOGIN_PW', 'deleteme'))
+        if ssl_enabled:
+            args['dcos_url'] = args['dcos_url'].replace('http', 'https')
+    else:
+        api_class = dcos_api.DcosApiSession
+
+    return api_class(**args)
+
+
+@retrying.retry(
+    wait_fixed=(1 * 1000),
+    stop_max_delay=(120 * 1000),
+    retry_on_result=lambda x: not x)
+def wait_for_dns(dcos_api_session, hostname):
+    """Return True if Mesos-DNS has at least one entry for hostname."""
+    hosts = dcos_api_session.get('/mesos_dns/v1/hosts/' + hostname).json()
+    return any(h['host'] != '' and h['ip'] != '' for h in hosts)
+
+
+def find_app_port(config, app_name):
+    """ Finds the port associated with the app in haproxy_getconfig.
+    This is done through regex pattern matching.
+    """
+    pattern = re.search(r'{0}(.+?)\n  bind .+:\d+'.format(app_name), config)
+    return pattern.group()[-5:]

@@ -221,7 +221,7 @@ def dcos_api_session(onprem_cluster, launcher, is_enterprise):
 
 
 def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, security_mode=None):
-#    ssl_enabled = security_mode in ('strict', 'permissive')
+    ssl_enabled = security_mode in ('strict', 'permissive')
     args = {
         'dcos_url': 'http://' + onprem_cluster.masters[0].public_ip,
         'masters': [m.public_ip for m in onprem_cluster.masters],
@@ -235,8 +235,8 @@ def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, s
         args['auth_user'] = enterprise.EnterpriseUser(
             os.getenv('DCOS_LOGIN_UNAME', 'bootstrapuser'),
             os.getenv('DCOS_LOGIN_PW', 'deleteme'))
-#        if ssl_enabled:
-#            args['dcos_url'] = args['dcos_url'].replace('http', 'https')
+        if ssl_enabled:
+            args['dcos_url'] = args['dcos_url'].replace('http', 'https')
     else:
         api_class = dcos_api.DcosApiSession
 

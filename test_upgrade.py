@@ -32,7 +32,7 @@ import yaml
 
 import upgrade
 from conftest import wait_for_dns, make_dcos_api_session
-from json_job_definitions import spark_consumer_job, spark_producer_job
+from json_job_definitions import spark_consumer_job, spark_producer_job, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc
 
 log = logging.getLogger(__name__)
 

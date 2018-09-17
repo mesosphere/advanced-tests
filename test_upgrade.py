@@ -351,6 +351,15 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
 class TestUpgrade:
     def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload, dcos_api_session):
+        """
+        This test is to verify that certain jobs that we started prior to upgrading have continued to function through
+        the upgrade
+        :param upgraded_dcos: the upgraded instance of DCOS
+        :param use_pods: boolean to determine if we're using docker pods or not
+        :param setup_workload: the return from our setup of the workload prior to upgrading
+        :param dcos_api_session: the api session connected to our instance of dcos
+        """
+
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
         for test_app in test_app_ids:
@@ -401,6 +410,14 @@ class TestUpgrade:
                 failures='\n'.join(dns_failure_times))
 
     def test_cassandra_tasks_survive(self, upgraded_dcos, dcos_api_session, setup_workload, dcoscli):
+        """
+        This test is to confirm that a combined job utilizing kafka, cassandra, and spark has conitnued to function
+        through the upgrade
+        :param upgraded_dcos: the upgraded instance of DCOS
+        :param dcos_api_session: the api session connected to our instance of dcos
+        :param setup_workload: the return from our setup of the workload prior to upgrading
+        :param dcoscli: the api session connected to our instance of dcos
+        """
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
         dcos_api_session.marathon.wait_for_deployments_complete()
@@ -415,6 +432,13 @@ class TestUpgrade:
         assert int(kafka_job_words_post_upgrade) > int(kafka_job_words)
 
     def test_marathonlb_apps_survived(self, upgraded_dcos, dcos_api_session, setup_workload):
+        """
+        This test is to confirm that certain jobs that utilize marathon-lb have continued to function through the
+        upgrade
+        :param upgraded_dcos: the upgraded instance of DCOS
+        :param dcos_api_session: the api session connected to our instance of dcos
+        :param setup_workload: the return from our setup of the workload prior to upgrading
+        """
         test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
 
         log.info("Every marathon instance we attempted to run: '" + str(marathon_app_ids) + "'")

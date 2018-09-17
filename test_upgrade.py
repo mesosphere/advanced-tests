@@ -168,7 +168,7 @@ def start_spark_jobs(dcoscli):
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
 
-def start_marathon_apps(dcos_api_session):
+def start_marathon_apps(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
     dcos_api_session.marathon.deploy_app(viplisten_app)
@@ -276,7 +276,7 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
     marathon_app_ids = start_marathonlb_apps(dcos_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc)
 
     # Start the marathon apps
-    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session)
+    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods)
 
     # Save the master's state of the task to compare with
     # the master's view after the upgrade.

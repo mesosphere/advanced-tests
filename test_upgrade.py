@@ -124,7 +124,7 @@ def wait_for_kafka_topic_to_start_counting(dcoscli):
     assert(str(kafka_job_words) != "0")
 
 
-def spin_up_marathon_apps(superuser_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
+def start_marathonlb_apps(superuser_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
     app_defs = [docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc]
     app_ids = []
 
@@ -148,47 +148,7 @@ def spin_up_marathon_apps(superuser_api_session, docker_bridge, docker_host, doc
     return app_ids
 
 
-@pytest.fixture(scope='session')
-def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
-    if dcos_api_session.default_url.scheme == 'https':
-        dcos_api_session.set_ca_cert()
-    dcos_api_session.wait_for_dcos()
-
-    # Installing dcos-enterprise-cli to start our frameworks, and install various jobs.
-    dcos_api_session.cosmos.install_package('dcos-enterprise-cli', None, None)
-
-    # Dictionary containing installed framework-ids.
-    framework_ids = {}
-
-    # Add essential services for basic run test
-    services = {
-        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
-        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
-        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None},
-        'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
-    }
-
-    # Installing the frameworks
-    for package, config in services.items():
-        installed_package = dcos_api_session.cosmos.install_package(package, config['version'], config['option'])
-        log.info("Installing {0} {1}".format(package, config['version'] or "(most recent version)"))
-
-        framework_ids[package] = installed_package.json()['appId']
-
-    # Waiting for deployments to complete.
-    dcos_api_session.marathon.wait_for_deployments_complete()
-    for package in framework_ids.keys():
-        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
-    log.info("Completed installing required services.")
-
-    # Install our various CLIs
-    dcoscli.exec_command("dcos package install cassandra --cli --yes".split())
-    dcoscli.exec_command("dcos package install kafka --cli --yes".split())
-    dcoscli.exec_command("dcos package install spark --cli --yes".split())
-
-    wait_for_frameworks_to_deploy(dcoscli)
-
-    # Run our two spark jobs to exercise all three of our frameworks
+def start_spark_jobs(dcoscli):
     try:
         spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
         wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
@@ -207,20 +167,8 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
         spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
-    # Checking whether applications are running without errors.
-    for package in framework_ids.keys():
-        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
 
-    # Wait for the kafka topic to show up in kafka's topic list,
-    # and then wait for the topic to begin producing the word count
-    wait_for_kafka_topic_to_start(dcoscli)
-    wait_for_kafka_topic_to_start_counting(dcoscli)
-
-    # Preserve the current quantity of words from the Kafka job so we can compare it later
-    kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
-
-    marathon_app_ids = spin_up_marathon_apps(dcos_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc)
-
+def start_marathon_apps(dcos_api_session):
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
     dcos_api_session.marathon.deploy_app(viplisten_app)
@@ -259,6 +207,76 @@ def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, health
 
     for app in test_apps:
         assert app['instances'] == len(tasks_start[app['id']])
+
+    return test_app_ids, test_pod_ids, tasks_start
+
+
+def init_main_frameworks(dcos_api_session, dcoscli):
+    # Dictionary containing installed framework-ids.
+    framework_ids = {}
+
+    # Add essential services for basic run test
+    services = {
+        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
+        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
+        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None},
+        'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
+    }
+
+    # Installing the frameworks
+    for package, config in services.items():
+        installed_package = dcos_api_session.cosmos.install_package(package, config['version'], config['option'])
+        log.info("Installing {0} {1}".format(package, config['version'] or "(most recent version)"))
+
+        framework_ids[package] = installed_package.json()['appId']
+
+    # Waiting for deployments to complete.
+    dcos_api_session.marathon.wait_for_deployments_complete()
+    for package in framework_ids.keys():
+        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
+    log.info("Completed installing required services.")
+
+    # Install the various CLIs for our frameworks
+    dcoscli.exec_command("dcos package install cassandra --cli --yes".split())
+    dcoscli.exec_command("dcos package install kafka --cli --yes".split())
+    dcoscli.exec_command("dcos package install spark --cli --yes".split())
+
+    return framework_ids
+
+
+@pytest.fixture(scope='session')
+def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
+    if dcos_api_session.default_url.scheme == 'https':
+        dcos_api_session.set_ca_cert()
+    dcos_api_session.wait_for_dcos()
+
+    # Installing dcos-enterprise-cli to start our frameworks, and install various jobs.
+    dcos_api_session.cosmos.install_package('dcos-enterprise-cli', None, None)
+
+    framework_ids = init_main_frameworks(dcos_api_session, dcoscli)
+
+    wait_for_frameworks_to_deploy(dcoscli)
+
+    # Run our two spark jobs to exercise all three of our frameworks
+    start_spark_jobs(dcoscli)
+
+    # Checking whether applications are running without errors.
+    for package in framework_ids.keys():
+        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
+
+    # Wait for the kafka topic to show up in kafka's topic list,
+    # and then wait for the topic to begin producing the word count
+    wait_for_kafka_topic_to_start(dcoscli)
+    wait_for_kafka_topic_to_start_counting(dcoscli)
+
+    # Preserve the current quantity of words from the Kafka job so we can compare it later
+    kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+
+    # Start apps that rely on marathon-lb
+    marathon_app_ids = start_marathonlb_apps(dcos_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc)
+
+    # Start the marathon apps
+    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session)
 
     # Save the master's state of the task to compare with
     # the master's view after the upgrade.

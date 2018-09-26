@@ -153,6 +153,7 @@ def start_spark_jobs(dcoscli):
         spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
         wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
     except AssertionError:
+        log.info('Initialization of spark producer job failed, retrying the run...')
         driver_name = str(spark_producer_response[0])[str(spark_producer_response[0]).index('driver-'):]
         dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
         spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
@@ -162,6 +163,7 @@ def start_spark_jobs(dcoscli):
         spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
     except AssertionError:
+        log.info('Initialization of spark consumer job failed, retrying the run...')
         driver_name = str(spark_consumer_response[0])[str(spark_consumer_response[0]).index('driver-'):]
         dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
         spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())

@@ -448,5 +448,5 @@ class TestUpgrade:
         for marathon_app in marathon_app_ids:
             log.info("Testing for maintained running of: " + marathon_app)
 
-            dcos_api_session.marathon.wait_for_app_deployment(marathon_app, 4, True, False, 300)
-            assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, False)
+            dcos_api_session.marathon.wait_for_app_deployment(marathon_app, 4, True, True, 300)
+            assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, True)

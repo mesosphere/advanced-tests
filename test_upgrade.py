@@ -298,6 +298,8 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     bootstrap_ssh_client = launcher.get_bootstrap_ssh_client()
     upgrade.reset_bootstrap_host(bootstrap_ssh_client, bootstrap_host)
 
+    log.info("ssh key: '" + bootstrap_ssh_client.key + "'")
+
     upgrade_config_overrides = dict()
     if 'TEST_UPGRADE_CONFIG_PATH' in os.environ:
         with open(os.environ['TEST_UPGRADE_CONFIG_PATH'], 'r') as f:

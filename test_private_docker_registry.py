@@ -115,12 +115,16 @@ def hello_world_app():
 def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster, hello_world_app):
     bootstrap_ssh_client = launcher.get_bootstrap_ssh_client()
 
+    log.info("Collecting Master, and Node lists to add docker registry access")
+
     master_ips = [m.public_ip for m in onprem_cluster.masters]
     private_ips = [m.public_ip for m in onprem_cluster.private_agents]
     publics_ips = [m.public_ip for m in onprem_cluster.public_agents]
 
     for node_host in itertools.chain(master_ips, private_ips, publics_ips):
         with bootstrap_ssh_client.tunnel(node_host) as tunnel:
+            log.info("Adding docker registry access to: " + node_host)
+
             tunnel.command("docker login -u mesosphere-ci -p k7DRiu4d3W7e0eP8 docker-private.mesosphere.com".split())
             tunnel.command("sudo tar -czf docker.tar.gz .docker".split())
             tunnel.command("sudo tar -tvf ~/docker.tar.gz".split())
@@ -130,6 +134,8 @@ def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster, h
     if dcos_api_session.default_url.scheme == 'https':
         dcos_api_session.set_ca_cert()
     dcos_api_session.wait_for_dcos()
+
+    log.info("Creating Hello World App to test docker registry access")
 
     dcos_api_session.marathon.deploy_app(hello_world_app)
     dcos_api_session.marathon.wait_for_deployments_complete()

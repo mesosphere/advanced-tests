@@ -24,6 +24,7 @@ import logging
 import math
 import os
 import itertools
+import time
 import pprint
 import uuid
 
@@ -85,10 +86,33 @@ def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool=False, s
 def use_pods():
     return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
+@pytest.fixture(scope='session')
+def hello_world_app():
+    return {
+        "id": "/helloworld",
+        "cpus": 1,
+        "mem": 1024,
+        "instances": 1,
+        "container": {
+            "type": "DOCKER",
+            "volumes": [],
+            "docker": {
+                "image": "docker-private.mesosphere.com/hello-world:latest",
+                "forcePullImage": False,
+                "privileged": False,
+                "parameters": []
+            }
+        },
+        "fetch": [
+            {
+                "uri": "file:///etc/docker.tar.gz"
+            }
+        ]
+    }
+
 
 @pytest.fixture(scope='session')
-def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster):
-    bootstrap_host = onprem_cluster.bootstrap_host.public_ip
+def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster, hello_world_app):
     bootstrap_ssh_client = launcher.get_bootstrap_ssh_client()
 
     master_ips = [m.public_ip for m in onprem_cluster.masters]
@@ -97,9 +121,21 @@ def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster):
 
     for node_host in itertools.chain(master_ips, private_ips, publics_ips):
         with bootstrap_ssh_client.tunnel(node_host) as tunnel:
-            tunnel
+            tunnel.command("docker login -u mesosphere-ci -p k7DRiu4d3W7e0eP8 docker-private.mesosphere.com".split())
+            tunnel.command("sudo tar -czf docker.tar.gz .docker".split())
+            tunnel.command("sudo tar -tvf ~/docker.tar.gz".split())
+
+            tunnel.command("sudo cp docker.tar.gz /etc/".split())
+
+    if dcos_api_session.default_url.scheme == 'https':
+        dcos_api_session.set_ca_cert()
+    dcos_api_session.wait_for_dcos()
+
+    dcos_api_session.marathon.deploy_app(hello_world_app)
+    dcos_api_session.marathon.wait_for_deployments_complete()
 
 
 class TestPrivateDockerRegistry:
     def test_private_docker_registry(self, enable_private_docker_registry):
+        time.sleep(50000)
         assert 1 == 1

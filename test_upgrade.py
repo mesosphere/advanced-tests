@@ -124,8 +124,8 @@ def wait_for_kafka_topic_to_start_counting(dcoscli):
     assert(str(kafka_job_words) != "0")
 
 
-def start_marathonlb_apps(superuser_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
-    app_defs = [docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc]
+def start_marathonlb_apps(superuser_api_session):
+    app_defs = [docker_bridge(), docker_host(), docker_ippc(), ucr_bridge(), ucr_hort(), ucr_ippc()]
     app_ids = []
 
     for app_def in app_defs:
@@ -275,10 +275,10 @@ def setup_workload(dcos_api_session, dcoscli, use_pods):
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
     # Start apps that rely on marathon-lb
-    marathon_app_ids = start_marathonlb_apps(dcos_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc)
+    marathon_app_ids = start_marathonlb_apps(dcos_api_session, docker_bridge(), docker_host(), docker_ippc(), ucr_bridge(), ucr_hort(), ucr_ippc())
 
     # Start the marathon apps
-    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods)
+    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session, viptalk_app(), viplisten_app(), healthcheck_app(), dns_app(), docker_pod(), use_pods)
 
     # Save the master's state of the task to compare with
     # the master's view after the upgrade.
@@ -399,18 +399,18 @@ class TestUpgrade:
         assert is_contained(task_state_start, task_state_end), '{}\n\n{}'.format(task_state_start, task_state_end)
 
     @pytest.mark.xfail
-    def test_app_dns_survive(self, upgraded_dcos, dns_app):
+    def test_app_dns_survive(self, upgraded_dcos):
         marathon_framework_id = upgraded_dcos.marathon.get('/v2/info').json()['frameworkId']
-        dns_app_task = upgraded_dcos.marathon.get('/v2/apps' + dns_app['id'] + '/tasks').json()['tasks'][0]
+        dns_app_task = upgraded_dcos.marathon.get('/v2/apps' + dns_app()['id'] + '/tasks').json()['tasks'][0]
         dns_log = parse_dns_log(upgraded_dcos.mesos_sandbox_file(
             dns_app_task['slaveId'],
             marathon_framework_id,
             dns_app_task['id'],
-            dns_app['env']['DNS_LOG_FILENAME']))
+            dns_app()['env']['DNS_LOG_FILENAME']))
         dns_failure_times = [entry[0] for entry in dns_log if entry[1] != 'SUCCESS']
         assert len(dns_failure_times) == 0, 'Failed to resolve Marathon app hostname {hostname} at least once' \
             'Hostname failed to resolve at these times:\n{failures}'.format(
-                hostname=dns_app['env']['RESOLVE_NAME'],
+                hostname=dns_app()['env']['RESOLVE_NAME'],
                 failures='\n'.join(dns_failure_times))
 
     def test_cassandra_tasks_survive(self, upgraded_dcos, dcos_api_session, setup_workload, dcoscli):

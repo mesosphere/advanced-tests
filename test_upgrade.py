@@ -247,7 +247,7 @@ def init_main_frameworks(dcos_api_session, dcoscli):
 
 
 @pytest.fixture(scope='session')
-def setup_workload(dcos_api_session, dcoscli, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
+def setup_workload(dcos_api_session, dcoscli, use_pods):
     if dcos_api_session.default_url.scheme == 'https':
         dcos_api_session.set_ca_cert()
     dcos_api_session.wait_for_dcos()

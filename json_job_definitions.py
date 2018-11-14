@@ -5,7 +5,6 @@ from dcos_test_utils import helpers
 
 TEST_APP_NAME_FMT = 'upgrade-{}'
 
-@pytest.fixture(scope='session')
 def viplisten_app():
     return {
         "id": '/' + TEST_APP_NAME_FMT.format('viplisten-' + uuid.uuid4().hex),
@@ -37,7 +36,6 @@ def viplisten_app():
     }
 
 
-@pytest.fixture(scope='session')
 def viptalk_app():
     return {
         "id": '/' + TEST_APP_NAME_FMT.format('viptalk-' + uuid.uuid4().hex),
@@ -64,7 +62,6 @@ def viptalk_app():
     }
 
 
-@pytest.fixture(scope='session')
 def healthcheck_app():
     # HTTP healthcheck app to make sure tasks are reachable during the upgrade.
     # If a task fails its healthcheck, Marathon will terminate it and we'll
@@ -99,7 +96,6 @@ def healthcheck_app():
     }
 
 
-@pytest.fixture(scope='session')
 def dns_app(healthcheck_app):
     # DNS resolution app to make sure DNS is available during the upgrade.
     # Periodically resolves the healthcheck app's domain name and logs whether
@@ -140,7 +136,6 @@ done
     }
 
 
-@pytest.fixture(scope='session')
 def docker_pod():
     return {
         'id': '/' + TEST_APP_NAME_FMT.format('docker-pod-' + uuid.uuid4().hex),
@@ -165,7 +160,6 @@ def docker_pod():
     }
 
 
-@pytest.fixture(scope='session')
 def spark_producer_job():
     return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s ' \
            '--conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=2 --conf ' \
@@ -177,12 +171,10 @@ def spark_producer_job():
            '--wordsPerSecond 1" '
 
 
-@pytest.fixture(scope='session')
 def spark_consumer_job():
     return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=1 --conf spark.executor.cores=1 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory --conf spark.cassandra.connection.port=9042 --class KafkaWordCount http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar --appName Consumer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --groupId group1 --batchSizeSeconds 10 --cassandraKeyspace mykeyspace --cassandraTable mytable"'
 
 
-@pytest.fixture(scope='session')
 def docker_bridge():
     return {
         "id": "/nginx-docker-bridge",
@@ -231,7 +223,6 @@ def docker_bridge():
     }
 
 
-@pytest.fixture(scope='session')
 def docker_host():
     return {
         "id": "/nginx-docker-host",
@@ -278,7 +269,6 @@ def docker_host():
     }
 
 
-@pytest.fixture(scope='session')
 def docker_ippc():
     return {
         "id": "/nginx-docker-ippc",
@@ -326,7 +316,6 @@ def docker_ippc():
     }
 
 
-@pytest.fixture(scope='session')
 def ucr_bridge():
     return {
         "id": "/nginx-ucr-bridge",
@@ -376,7 +365,6 @@ def ucr_bridge():
     }
 
 
-@pytest.fixture(scope='session')
 def ucr_hort():
     return {
         "id": "/nginx-ucr-host",
@@ -430,7 +418,6 @@ def ucr_hort():
     }
 
 
-@pytest.fixture(scope='session')
 def ucr_ippc():
     return {
         "id": "/nginx-ucr-ippc",

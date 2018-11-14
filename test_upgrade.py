@@ -275,10 +275,10 @@ def setup_workload(dcos_api_session, dcoscli, use_pods):
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
     # Start apps that rely on marathon-lb
-    marathon_app_ids = start_marathonlb_apps(dcos_api_session, docker_bridge(), docker_host(), docker_ippc(), ucr_bridge(), ucr_hort(), ucr_ippc())
+    marathon_app_ids = start_marathonlb_apps(dcos_api_session)
 
     # Start the marathon apps
-    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session, viptalk_app(), viplisten_app(), healthcheck_app(), dns_app(), docker_pod(), use_pods)
+    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session, use_pods)
 
     # Save the master's state of the task to compare with
     # the master's view after the upgrade.

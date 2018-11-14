@@ -170,32 +170,32 @@ def start_spark_jobs(dcoscli):
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
 
-def start_marathon_apps(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
+def start_marathon_apps(dcos_api_session, use_pods):
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
-    dcos_api_session.marathon.deploy_app(viplisten_app)
+    dcos_api_session.marathon.deploy_app(viplisten_app())
     dcos_api_session.marathon.wait_for_deployments_complete()
     # viptalk app depends on VIP from viplisten app, which may still fail
     # the first try immediately after wait_for_deployments_complete
-    dcos_api_session.marathon.deploy_app(viptalk_app, ignore_failed_tasks=True)
+    dcos_api_session.marathon.deploy_app(viptalk_app(), ignore_failed_tasks=True)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    dcos_api_session.marathon.deploy_app(healthcheck_app)
+    dcos_api_session.marathon.deploy_app(healthcheck_app())
     dcos_api_session.marathon.wait_for_deployments_complete()
     # This is a hack to make sure we don't deploy dns_app before the name it's
     # trying to resolve is available.
-    wait_for_dns(dcos_api_session, dns_app['env']['RESOLVE_NAME'])
-    dcos_api_session.marathon.deploy_app(dns_app, check_health=False)
+    wait_for_dns(dcos_api_session, dns_app()['env']['RESOLVE_NAME'])
+    dcos_api_session.marathon.deploy_app(dns_app(), check_health=False)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    test_apps = [healthcheck_app, dns_app, viplisten_app, viptalk_app]
+    test_apps = [healthcheck_app(), dns_app(), viplisten_app(), viptalk_app()]
     test_app_ids = [app['id'] for app in test_apps]
     app_tasks_start = {app_id: sorted(app_task_ids(dcos_api_session, app_id)) for app_id in test_app_ids}
     tasks_start = {**app_tasks_start}
     test_pods = list()
     test_pod_ids = list()
     if use_pods:
-        dcos_api_session.marathon.deploy_pod(docker_pod)
+        dcos_api_session.marathon.deploy_pod(docker_pod())
         dcos_api_session.marathon.wait_for_deployments_complete()
         test_pods = [docker_pod]
         test_pod_ids = [pod['id'] for pod in test_pods]

@@ -173,18 +173,27 @@ def start_spark_jobs(dcoscli):
 def start_marathon_apps(dcos_api_session, use_pods):
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
+    log.info("Launching viplisten_app")
     dcos_api_session.marathon.deploy_app(viplisten_app())
     dcos_api_session.marathon.wait_for_deployments_complete()
     # viptalk app depends on VIP from viplisten app, which may still fail
     # the first try immediately after wait_for_deployments_complete
     dcos_api_session.marathon.deploy_app(viptalk_app(), ignore_failed_tasks=True)
+    log.info("Launching viptalk_app")
     dcos_api_session.marathon.wait_for_deployments_complete()
 
+    log.info("Launching healthcheck_app")
     dcos_api_session.marathon.deploy_app(healthcheck_app())
     dcos_api_session.marathon.wait_for_deployments_complete()
+
+    log.info("dns_app: '" + dns_app(healthcheck_app()) + "'")
+    log.info("resolve name: '" + dns_app(healthcheck_app())['env']['RESOLVE_NAME'] + "'")
+
     # This is a hack to make sure we don't deploy dns_app before the name it's
     # trying to resolve is available.
+    log.info("Waiting for healthsheck app to launch to launch dns_app...")
     wait_for_dns(dcos_api_session, dns_app(healthcheck_app())['env']['RESOLVE_NAME'])
+    log.info("Launching dns_app")
     dcos_api_session.marathon.deploy_app(dns_app(healthcheck_app()), check_health=False)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
@@ -195,6 +204,7 @@ def start_marathon_apps(dcos_api_session, use_pods):
     test_pods = list()
     test_pod_ids = list()
     if use_pods:
+        log.info("Launching docker_pod")
         dcos_api_session.marathon.deploy_pod(docker_pod())
         dcos_api_session.marathon.wait_for_deployments_complete()
         test_pods = [docker_pod]

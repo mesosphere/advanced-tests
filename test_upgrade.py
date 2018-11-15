@@ -184,11 +184,11 @@ def start_marathon_apps(dcos_api_session, use_pods):
     dcos_api_session.marathon.wait_for_deployments_complete()
     # This is a hack to make sure we don't deploy dns_app before the name it's
     # trying to resolve is available.
-    wait_for_dns(dcos_api_session, dns_app()['env']['RESOLVE_NAME'])
-    dcos_api_session.marathon.deploy_app(dns_app(), check_health=False)
+    wait_for_dns(dcos_api_session, dns_app(healthcheck_app())['env']['RESOLVE_NAME'])
+    dcos_api_session.marathon.deploy_app(dns_app(healthcheck_app()), check_health=False)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    test_apps = [healthcheck_app(), dns_app(), viplisten_app(), viptalk_app()]
+    test_apps = [healthcheck_app(), dns_app(healthcheck_app()), viplisten_app(), viptalk_app()]
     test_app_ids = [app['id'] for app in test_apps]
     app_tasks_start = {app_id: sorted(app_task_ids(dcos_api_session, app_id)) for app_id in test_app_ids}
     tasks_start = {**app_tasks_start}
@@ -401,12 +401,12 @@ class TestUpgrade:
     @pytest.mark.xfail
     def test_app_dns_survive(self, upgraded_dcos):
         marathon_framework_id = upgraded_dcos.marathon.get('/v2/info').json()['frameworkId']
-        dns_app_task = upgraded_dcos.marathon.get('/v2/apps' + dns_app()['id'] + '/tasks').json()['tasks'][0]
+        dns_app_task = upgraded_dcos.marathon.get('/v2/apps' + dns_app(healthcheck_app())['id'] + '/tasks').json()['tasks'][0]
         dns_log = parse_dns_log(upgraded_dcos.mesos_sandbox_file(
             dns_app_task['slaveId'],
             marathon_framework_id,
             dns_app_task['id'],
-            dns_app()['env']['DNS_LOG_FILENAME']))
+            dns_app(healthcheck_app())['env']['DNS_LOG_FILENAME']))
         dns_failure_times = [entry[0] for entry in dns_log if entry[1] != 'SUCCESS']
         assert len(dns_failure_times) == 0, 'Failed to resolve Marathon app hostname {hostname} at least once' \
             'Hostname failed to resolve at these times:\n{failures}'.format(

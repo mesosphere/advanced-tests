@@ -124,8 +124,8 @@ def wait_for_kafka_topic_to_start_counting(dcoscli):
     assert(str(kafka_job_words) != "0")
 
 
-def start_marathonlb_apps(superuser_api_session):
-    app_defs = [docker_bridge(), docker_host(), docker_ippc(), ucr_bridge(), ucr_hort(), ucr_ippc()]
+def start_marathonlb_apps(superuser_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
+    app_defs = [docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc]
     app_ids = []
 
     for app_def in app_defs:
@@ -148,56 +148,56 @@ def start_marathonlb_apps(superuser_api_session):
     return app_ids
 
 
-def start_spark_jobs(dcoscli):
+def start_spark_jobs(dcoscli, spark_producer_job, spark_consumer_job):
     try:
-        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
+        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job)
         wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
     except AssertionError:
         log.info('Initialization of spark producer job failed, retrying the run...')
         driver_name = str(spark_producer_response[0])[str(spark_producer_response[0]).index('driver-'):]
         dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
-        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job())
+        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job)
         wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
 
     try:
-        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
+        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job)
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
     except AssertionError:
         log.info('Initialization of spark consumer job failed, retrying the run...')
         driver_name = str(spark_consumer_response[0])[str(spark_consumer_response[0]).index('driver-'):]
         dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
-        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job())
+        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job)
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
 
-def start_marathon_apps(dcos_api_session, use_pods):
+def start_marathon_apps(dcos_api_session, viplisten_app, viptalk_app, healthcheck_app, dns_app, docker_pod, use_pods):
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
     log.info("Launching viplisten_app")
-    dcos_api_session.marathon.deploy_app(viplisten_app())
+    dcos_api_session.marathon.deploy_app(viplisten_app)
     dcos_api_session.marathon.wait_for_deployments_complete()
     # viptalk app depends on VIP from viplisten app, which may still fail
     # the first try immediately after wait_for_deployments_complete
-    dcos_api_session.marathon.deploy_app(viptalk_app(), ignore_failed_tasks=True)
+    dcos_api_session.marathon.deploy_app(viptalk_app, ignore_failed_tasks=True)
     log.info("Launching viptalk_app")
     dcos_api_session.marathon.wait_for_deployments_complete()
 
     log.info("Launching healthcheck_app")
-    dcos_api_session.marathon.deploy_app(healthcheck_app())
+    dcos_api_session.marathon.deploy_app(healthcheck_app)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    log.info("dns_app: '" + str(dns_app(healthcheck_app())) + "'")
-    log.info("resolve name: '" + str(dns_app(healthcheck_app())['env']['RESOLVE_NAME']) + "'")
+    log.info("dns_app: '" + str(dns_app + "'"))
+    log.info("resolve name: '" + str(dns_app['env']['RESOLVE_NAME']) + "'")
 
     # This is a hack to make sure we don't deploy dns_app before the name it's
     # trying to resolve is available.
     log.info("Waiting for healthsheck app to launch to launch dns_app...")
-    wait_for_dns(dcos_api_session, dns_app(healthcheck_app())['env']['RESOLVE_NAME'])
+    wait_for_dns(dcos_api_session, dns_app['env']['RESOLVE_NAME'])
     log.info("Launching dns_app")
-    dcos_api_session.marathon.deploy_app(dns_app(healthcheck_app()), check_health=False)
+    dcos_api_session.marathon.deploy_app(dns_app, check_health=False)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    test_apps = [healthcheck_app(), dns_app(healthcheck_app()), viplisten_app(), viptalk_app()]
+    test_apps = [healthcheck_app, dns_app, viplisten_app, viptalk_app]
     test_app_ids = [app['id'] for app in test_apps]
     app_tasks_start = {app_id: sorted(app_task_ids(dcos_api_session, app_id)) for app_id in test_app_ids}
     tasks_start = {**app_tasks_start}
@@ -205,7 +205,7 @@ def start_marathon_apps(dcos_api_session, use_pods):
     test_pod_ids = list()
     if use_pods:
         log.info("Launching docker_pod")
-        dcos_api_session.marathon.deploy_pod(docker_pod())
+        dcos_api_session.marathon.deploy_pod(docker_pod)
         dcos_api_session.marathon.wait_for_deployments_complete()
         test_pods = [docker_pod]
         test_pod_ids = [pod['id'] for pod in test_pods]
@@ -257,7 +257,7 @@ def init_main_frameworks(dcos_api_session, dcoscli):
 
 
 @pytest.fixture(scope='session')
-def setup_workload(dcos_api_session, dcoscli, use_pods):
+def setup_workload(dcos_api_session, dcoscli, viplisten_app, viptalk_app, healthcheck_app, dns_app, docker_pod, use_pods, spark_producer_job, spark_consumer_job):
     if dcos_api_session.default_url.scheme == 'https':
         dcos_api_session.set_ca_cert()
     dcos_api_session.wait_for_dcos()
@@ -270,7 +270,7 @@ def setup_workload(dcos_api_session, dcoscli, use_pods):
     wait_for_frameworks_to_deploy(dcoscli)
 
     # Run our two spark jobs to exercise all three of our frameworks
-    start_spark_jobs(dcoscli)
+    start_spark_jobs(dcoscli, spark_producer_job, spark_consumer_job)
 
     # Checking whether applications are running without errors.
     for package in framework_ids.keys():
@@ -285,10 +285,10 @@ def setup_workload(dcos_api_session, dcoscli, use_pods):
     kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
 
     # Start apps that rely on marathon-lb
-    marathon_app_ids = start_marathonlb_apps(dcos_api_session)
+    marathon_app_ids = start_marathonlb_apps(dcos_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc)
 
     # Start the marathon apps
-    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session, use_pods)
+    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session, viplisten_app, viptalk_app, healthcheck_app, dns_app, docker_pod, use_pods, use_pods)
 
     # Save the master's state of the task to compare with
     # the master's view after the upgrade.
@@ -409,14 +409,14 @@ class TestUpgrade:
         assert is_contained(task_state_start, task_state_end), '{}\n\n{}'.format(task_state_start, task_state_end)
 
     @pytest.mark.xfail
-    def test_app_dns_survive(self, upgraded_dcos):
+    def test_app_dns_survive(self, upgraded_dcos, dns_app):
         marathon_framework_id = upgraded_dcos.marathon.get('/v2/info').json()['frameworkId']
-        dns_app_task = upgraded_dcos.marathon.get('/v2/apps' + dns_app(healthcheck_app())['id'] + '/tasks').json()['tasks'][0]
+        dns_app_task = upgraded_dcos.marathon.get('/v2/apps' + dns_app['id'] + '/tasks').json()['tasks'][0]
         dns_log = parse_dns_log(upgraded_dcos.mesos_sandbox_file(
             dns_app_task['slaveId'],
             marathon_framework_id,
             dns_app_task['id'],
-            dns_app(healthcheck_app())['env']['DNS_LOG_FILENAME']))
+            dns_app['env']['DNS_LOG_FILENAME']))
         dns_failure_times = [entry[0] for entry in dns_log if entry[1] != 'SUCCESS']
         assert len(dns_failure_times) == 0, 'Failed to resolve Marathon app hostname {hostname} at least once' \
             'Hostname failed to resolve at these times:\n{failures}'.format(

@@ -186,8 +186,8 @@ def start_marathon_apps(dcos_api_session, use_pods):
     dcos_api_session.marathon.deploy_app(healthcheck_app())
     dcos_api_session.marathon.wait_for_deployments_complete()
 
-    log.info("dns_app: '" + dns_app(healthcheck_app()) + "'")
-    log.info("resolve name: '" + dns_app(healthcheck_app())['env']['RESOLVE_NAME'] + "'")
+    log.info("dns_app: '" + str(dns_app(healthcheck_app())) + "'")
+    log.info("resolve name: '" + str(dns_app(healthcheck_app())['env']['RESOLVE_NAME']) + "'")
 
     # This is a hack to make sure we don't deploy dns_app before the name it's
     # trying to resolve is available.

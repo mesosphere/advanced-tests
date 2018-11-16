@@ -223,6 +223,7 @@ def start_marathon_apps(dcos_api_session, viplisten_app, viptalk_app, healthchec
     return test_app_ids, test_pod_ids, tasks_start
 
 
+@retrying.retry(wait_fixed=5000, stop_max_delay=20000)
 def init_main_frameworks(dcos_api_session, dcoscli):
     # Dictionary containing installed framework-ids.
     framework_ids = {}

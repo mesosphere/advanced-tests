@@ -223,7 +223,6 @@ def start_marathon_apps(dcos_api_session, viplisten_app, viptalk_app, healthchec
     return test_app_ids, test_pod_ids, tasks_start
 
 
-@retrying.retry(wait_fixed=5000, stop_max_delay=20000)
 def init_main_frameworks(dcos_api_session, dcoscli):
     # Dictionary containing installed framework-ids.
     framework_ids = {}
@@ -236,12 +235,16 @@ def init_main_frameworks(dcos_api_session, dcoscli):
         'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
     }
 
+    @retrying.retry(wait_fixed=5000, stop_max_delay=20000)
+    def install_framework(api_session, framework_package, framework_config):
+        installed_package = api_session.cosmos.install_package(framework_package, framework_config['version'], framework_config['option'])
+        log.info("Installing {0} {1}".format(framework_package, framework_config['version'] or "(most recent version)"))
+
+        return installed_package.json()['appId']
+
     # Installing the frameworks
     for package, config in services.items():
-        installed_package = dcos_api_session.cosmos.install_package(package, config['version'], config['option'])
-        log.info("Installing {0} {1}".format(package, config['version'] or "(most recent version)"))
-
-        framework_ids[package] = installed_package.json()['appId']
+        framework_ids[package] = install_framework(dcos_api_session, package, config)
 
     # Waiting for deployments to complete.
     dcos_api_session.marathon.wait_for_deployments_complete()

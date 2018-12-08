@@ -124,6 +124,9 @@ TEST_CUSTOM_CHECKS=true
 [installer-cli-master]
 TEST_CUSTOM_CHECKS=true
 
+[installer-cli-1.12]
+TEST_CUSTOM_CHECKS=true
+
 [installer-cli-1.11]
 TEST_CUSTOM_CHECKS=true
 

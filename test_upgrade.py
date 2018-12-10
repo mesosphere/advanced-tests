@@ -61,7 +61,7 @@ def viplisten_app():
         "healthChecks": [{
             "protocol": "COMMAND",
             "command": {
-                "value": "/usr/bin/nslookup viplisten.marathon.l4lb.thisdcos.directory && pgrep -x /usr/bin/nc"
+                "value": "/usr/bin/nslookup viplisten.marathon.autoip.dcos.thisdcos.directory && pgrep -x /usr/bin/nc"
             },
             "gracePeriodSeconds": 300,
             "intervalSeconds": 60,

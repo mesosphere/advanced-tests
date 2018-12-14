@@ -299,7 +299,7 @@ def use_pods():
     return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
 
-@retrying.retry(wait_fixed=5000, stop_max_delay=300000)
+@retrying.retry(wait_fixed=60000, stop_max_delay=300000)
 def set_cert(dcos_api_session):
     if dcos_api_session.default_url.scheme == 'https':
         dcos_api_session.set_ca_cert()

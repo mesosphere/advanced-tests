@@ -299,10 +299,16 @@ def use_pods():
     return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
 
+@retrying.retry(wait_fixed=5000, stop_max_delay=300000)
+def set_cert(dcos_api_session):
+    if dcos_api_session.default_url.scheme == 'https':
+        dcos_api_session.set_ca_cert()
+
+
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
-    # if dcos_api_session.default_url.scheme == 'https':
-    #     dcos_api_session.set_ca_cert()
+    set_cert(dcos_api_session)
+
     dcos_api_session.wait_for_dcos()
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.

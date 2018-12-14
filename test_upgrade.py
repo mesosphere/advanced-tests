@@ -75,7 +75,7 @@ def viplisten_app():
 def viptalk_app():
     return {
         "id": '/' + TEST_APP_NAME_FMT.format('viptalk-' + uuid.uuid4().hex),
-        "cmd": "/usr/bin/nc viplisten.marathon.autoip.dcos.thisdcos.directory 5000 < /dev/zero",
+        "cmd": "/usr/bin/nc viplisten.marathon.l4lb.thisdcos.directory 5000 < /dev/zero",
         "cpus": 0.1,
         "mem": 32,
         "instances": 1,

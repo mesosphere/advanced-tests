@@ -41,8 +41,10 @@ TEST_APP_NAME_FMT = 'upgrade-{}'
 
 @pytest.fixture(scope='session')
 def viplisten_app():
+    service_name = TEST_APP_NAME_FMT.format('viplisten-' + uuid.uuid4().hex)
+
     return {
-        "id": '/' + TEST_APP_NAME_FMT.format('viplisten-' + uuid.uuid4().hex),
+        "id": '/' + service_name,
         "cmd": '/usr/bin/nc -l -p $PORT0',
         "cpus": 0.1,
         "mem": 32,
@@ -61,7 +63,7 @@ def viplisten_app():
         "healthChecks": [{
             "protocol": "COMMAND",
             "command": {
-                "value": "/usr/bin/nslookup viplisten.marathon.autoip.dcos.thisdcos.directory && pgrep -x /usr/bin/nc"
+                "value": "/usr/bin/nslookup " + service_name + ".marathon.autoip.dcos.thisdcos.directory && pgrep -x /usr/bin/nc"
             },
             "gracePeriodSeconds": 300,
             "intervalSeconds": 60,

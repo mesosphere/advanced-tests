@@ -122,11 +122,10 @@ def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster, h
     publics_ips = [m.public_ip for m in onprem_cluster.public_agents]
 
     for node_host in itertools.chain(master_ips, private_ips, publics_ips):
+        log.info("Adding docker registry access to: " + node_host)
+        bootstrap_ssh_client.add_ssh_user_to_docker_users(node_host)
+        
         with bootstrap_ssh_client.tunnel(node_host) as tunnel:
-            log.info("Adding docker registry access to: " + node_host)
-
-            tunnel.command("sudo usermod -a -G docker $USER".split())
-
             tunnel.command("source ~/.bash_profile".split())
 
             tunnel.command("docker login -u mesosphere-ci -p k7DRiu4d3W7e0eP8 docker-private.mesosphere.com".split())

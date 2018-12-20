@@ -127,6 +127,8 @@ def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster, h
 
             tunnel.command("sudo usermod -a -G docker $USER".split())
 
+            tunnel.command("exec bash".split())
+
             tunnel.command("docker login -u mesosphere-ci -p k7DRiu4d3W7e0eP8 docker-private.mesosphere.com".split())
             tunnel.command("sudo tar -czf docker.tar.gz .docker".split())
             tunnel.command("sudo tar -tvf ~/docker.tar.gz".split())

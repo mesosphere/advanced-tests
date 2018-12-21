@@ -124,7 +124,7 @@ def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster, h
     for node_host in itertools.chain(master_ips, private_ips, publics_ips):
         log.info("Adding docker registry access to: " + node_host)
         bootstrap_ssh_client.add_ssh_user_to_docker_users(node_host)
-        
+
         with bootstrap_ssh_client.tunnel(node_host) as tunnel:
             tunnel.command("source ~/.bash_profile".split())
 
@@ -134,9 +134,9 @@ def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster, h
 
             tunnel.command("sudo cp docker.tar.gz /etc/".split())
 
-    if dcos_api_session.default_url.scheme == 'https':
-        dcos_api_session.set_ca_cert()
-    dcos_api_session.wait_for_dcos()
+    # if dcos_api_session.default_url.scheme == 'https':
+    #     dcos_api_session.set_ca_cert()
+    # dcos_api_session.wait_for_dcos()
 
     log.info("Creating Hello World App to test docker registry access")
 

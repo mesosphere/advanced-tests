@@ -98,8 +98,8 @@ def hello_world_app():
             "volumes": [],
             "docker": {
                 "image": "docker-private.mesosphere.com/hello-world:latest",
-                "forcePullImage": False,
-                "privileged": False,
+                "forcePullImage": "false",
+                "privileged": "false",
                 "parameters": []
             }
         },
@@ -112,7 +112,7 @@ def hello_world_app():
 
 
 @pytest.fixture(scope='session')
-def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster):
+def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster, hello_world_app):
     bootstrap_ssh_client = launcher.get_bootstrap_ssh_client()
 
     log.info("Collecting Master, and Node lists to add docker registry access")
@@ -140,7 +140,7 @@ def enable_private_docker_registry(dcos_api_session, launcher, onprem_cluster):
 
     log.info("Creating Hello World App to test docker registry access")
 
-    dcos_api_session.marathon.deploy_app(hello_world_app())
+    dcos_api_session.marathon.deploy_app(hello_world_app)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
 

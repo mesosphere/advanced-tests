@@ -98,8 +98,8 @@ def hello_world_app():
             "volumes": [],
             "docker": {
                 "image": "docker-private.mesosphere.com/hello-world:latest",
-                "forcePullImage": 'False',
-                "privileged": 'False',
+                "forcePullImage": "false",
+                "privileged": "false",
                 "parameters": []
             }
         },

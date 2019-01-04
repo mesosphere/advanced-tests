@@ -150,7 +150,7 @@ def start_marathonlb_apps(superuser_api_session, docker_bridge, docker_host, doc
 
 def start_spark_jobs(dcoscli, spark_producer_job, spark_consumer_job):
     try:
-        spark_producer_response = dcoscli.exec_command(("dcos spark run --submit-args=" + spark_producer_job).split())
+        spark_producer_response = dcoscli.exec_command(["dcos", "spark", "run", "--submit-args=" + spark_producer_job])
         wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
     except AssertionError:
         log.info('Initialization of spark producer job failed, retrying the run...')

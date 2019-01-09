@@ -150,23 +150,23 @@ def start_marathonlb_apps(superuser_api_session, docker_bridge, docker_host, doc
 
 def start_spark_jobs(dcoscli, spark_producer_job, spark_consumer_job):
     try:
-        spark_producer_response = dcoscli.exec_command(["dcos", "spark", "run", "--submit-args=" + spark_producer_job])
+        spark_producer_response = dcoscli.exec_command_as_shell(["dcos", "spark", "run", "--submit-args=" + spark_producer_job])
         wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
     except AssertionError:
         log.info('Initialization of spark producer job failed, retrying the run...')
         driver_name = str(spark_producer_response[0])[str(spark_producer_response[0]).index('driver-'):]
-        dcoscli.exec_command("dcos spark kill " + driver_name)
-        spark_producer_response = dcoscli.exec_command("dcos spark run --submit-args=" + spark_producer_job)
+        dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
+        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job)
         wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
 
     try:
-        spark_consumer_response = dcoscli.exec_command("dcos spark run --submit-args=" + spark_consumer_job)
+        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job)
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
     except AssertionError:
         log.info('Initialization of spark consumer job failed, retrying the run...')
         driver_name = str(spark_consumer_response[0])[str(spark_consumer_response[0]).index('driver-'):]
-        dcoscli.exec_command("dcos spark kill " + driver_name)
-        spark_consumer_response = dcoscli.exec_command("dcos spark run --submit-args=" + spark_consumer_job)
+        dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
+        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job)
         wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
 
 

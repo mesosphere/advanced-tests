@@ -87,10 +87,12 @@ def launcher(create_cluster, cluster_info_path):
         # basic wait to account for initial provisioning delay
         time.sleep(int(os.getenv("INITIAL_SLEEP", "180")))
         launcher.wait()
+        launcher.install_dcos()
     else:
         try:
             launcher = dcos_launch.get_launcher(json.load(open(launch_config_path, 'r')))
             launcher.wait()
+            launcher.install_dcos()
         except dcos_launch.util.LauncherError:
             raise AssertionError(
                 'Cluster creation was not specified with TEST_CREATE_CLUSTER, yet launcher '

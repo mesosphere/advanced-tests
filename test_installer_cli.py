@@ -97,21 +97,12 @@ def onprem_launcher():
 
 @pytest.fixture(scope='session')
 def onprem_cluster(onprem_launcher, cluster_info_path):
-    """ This fixture uses the OnpremLauncher, but only spins up a bare cluster
-    by calling the create command and then not calling the wait command. Rather,
-    the bare cluster interface is exposed for waiting so that DC/OS will not be
-    installed as a part of the wait of the OnpremLauncher does. Finally, the
-    OnpremCluster object is returned in order to describe the hosts in the cluster.
+    """ This fixture creates and returns a cluster without DC/OS installed (calling wait() but not install_dcos())
     """
-    # need to get bare_cluster launcher to call wait as onprem_launcher will
-    # install dcos via API during wait and we want the CLI to do this
-    bare_cluster_launcher = onprem_launcher.get_bare_cluster_launcher()
-    info = bare_cluster_launcher.create()
+    info = onprem_launcher.create()
     with open(cluster_info_path, 'w') as f:
         json.dump(info, f)
-    log.info('Sleeping for 3 minutes as cloud provider creates bare cluster..')
-    time.sleep(180)
-    bare_cluster_launcher.wait()
+    onprem_launcher.wait()
     return onprem_launcher.get_onprem_cluster()
 
 

@@ -98,6 +98,6 @@ def launcher(create_cluster, cluster_info_path):
                 'Cluster creation was not specified with TEST_CREATE_CLUSTER, yet launcher '
                 'cannot reach the speficied cluster')
 
-    log.debug("SSH Key for Debugging: '" + launcher.get_bootstrap_ssh_client().key + "'")
+    log.info("SSH Key for Debugging: '" + launcher.get_bootstrap_ssh_client().key + "'")
 
     return launcher

@@ -103,6 +103,9 @@ def launcher(create_cluster, cluster_info_path):
             raise AssertionError(
                 'Cluster creation was not specified with TEST_CREATE_CLUSTER, yet launcher '
                 'cannot reach the speficied cluster')
+
+    log.info("SSH Key for Debugging: '" + launcher.get_bootstrap_ssh_client().key + "'")
+
     return launcher
 
 @pytest.fixture(scope='session')

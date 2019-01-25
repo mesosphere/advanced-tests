@@ -229,13 +229,11 @@ def init_main_frameworks(dcos_api_session, dcoscli):
 
     # Add essential services for basic run test
     services = {
-        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
-        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': {'USE_BOOTSTRAP_FOR_IP_DETECT': True}},
+        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': {'USE_BOOTSTRAP_FOR_IP_DETECT': True}},
+        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
         'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None},
         'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
     }
-
-    log.info(str(services))
 
     @retrying.retry(wait_fixed=5000, stop_max_delay=20000)
     def install_framework(api_session, framework_package, framework_config):
@@ -247,7 +245,6 @@ def init_main_frameworks(dcos_api_session, dcoscli):
 
     # Installing the frameworks
     for package, config in services.items():
-        log.info('Looping for {0}, and {1}'.format(package, config))
         framework_ids[package] = install_framework(dcos_api_session, package, config)
 
     # Waiting for deployments to complete.

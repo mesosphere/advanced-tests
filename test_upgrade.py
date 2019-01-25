@@ -229,9 +229,9 @@ def init_main_frameworks(dcos_api_session, dcoscli):
 
     # Add essential services for basic run test
     services = {
-        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': {'USE_BOOTSTRAP_FOR_IP_DETECT': True}},
+        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
         'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
-        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': None},
+        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': {'USE_BOOTSTRAP_FOR_IP_DETECT': True}},
         'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
     }
 

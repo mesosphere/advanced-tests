@@ -1,5 +1,5 @@
 requests
-git+https://github.com/dcos/dcos-test-utils.git@5c582b0dc5da861b0b4f5719574725c084a72062
+git+https://github.com/dcos/dcos-test-utils.git@2cb4f39c06d1f381b3234594872679222043d347
 git+https://github.com/dcos/dcos-launch.git@45fb3cf38e7f09f56f994a78fb3b596e3e2a79af
 pytest
 retrying

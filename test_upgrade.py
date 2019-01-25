@@ -236,16 +236,16 @@ def init_main_frameworks(dcos_api_session, dcoscli):
     }
 
     @retrying.retry(wait_fixed=5000, stop_max_delay=20000)
-    def install_framework(api_session, framework_package, framework_config):
-        log.info("Installing {0} {1} with options: {2}".format(framework_package, framework_config['version'] or "(most recent version)", framework_config['option'] or '(none)'))
+    def install_framework(api_session, framework_package):
+        log.info("Installing {0} {1} with options: {2}".format(framework_package, framework_package['version'] or "(most recent version)", framework_package['option'] or '(none)'))
 
-        installed_package = api_session.cosmos.install_package(framework_package, framework_config['version'], framework_config['option'])
+        installed_package = api_session.cosmos.install_package(framework_package, framework_package['version'], framework_package['option'])
 
         return installed_package.json()['appId']
 
     # Installing the frameworks
     for package, config in services.items():
-        framework_ids[package] = install_framework(dcos_api_session, package, config)
+        framework_ids[package] = install_framework(dcos_api_session, package)
 
     # Waiting for deployments to complete.
     dcos_api_session.marathon.wait_for_deployments_complete()

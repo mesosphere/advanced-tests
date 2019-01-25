@@ -237,8 +237,9 @@ def init_main_frameworks(dcos_api_session, dcoscli):
 
     @retrying.retry(wait_fixed=5000, stop_max_delay=20000)
     def install_framework(api_session, framework_package, framework_config):
+        log.info("Installing {0} {1} with options: {2}".format(framework_package, framework_config['version'] or "(most recent version)"), framework_config['option'] or '(none)')
+
         installed_package = api_session.cosmos.install_package(framework_package, framework_config['version'], framework_config['option'])
-        log.info("Installing {0} {1}".format(framework_package, framework_config['version'] or "(most recent version)"))
 
         return installed_package.json()['appId']
 

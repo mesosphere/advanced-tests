@@ -231,7 +231,7 @@ def init_main_frameworks(dcos_api_session, dcoscli):
     services = {
         'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
         'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
-        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': {'properties': {'service': {'properties': {'use_bootstrap_for_IP_detect': True, 'user': 'root'}, 'type': 'object'}}, 'type': 'object'}},
+        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': {'service': {'use_bootstrap_for_IP_detect': True, 'user': 'root'}}},
         'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
     }
 

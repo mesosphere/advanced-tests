@@ -29,6 +29,7 @@ import math
 import pytest
 import retrying
 import yaml
+from requests import HTTPError
 
 import upgrade
 from conftest import wait_for_dns, make_dcos_api_session
@@ -238,9 +239,14 @@ def init_main_frameworks(dcos_api_session, dcoscli):
     @retrying.retry(wait_fixed=5000, stop_max_delay=20000)
     def install_framework(api_session, framework_package, framework_config):
         log.info("Installing {0} {1} with options: {2}".format(framework_package, framework_config['version'] or "(most recent version)", framework_config['option'] or '(none)'))
-        installed_package = api_session.cosmos.install_package(framework_package, framework_config['version'], framework_config['option'])
-        #if "PackageAlreadyInstalled" in str(installed_package):
-        log.info("Package Already Installed... Dumping package list:" + str(api_session.cosmos.list_packages()))
+        try:
+            installed_package = api_session.cosmos.install_package(framework_package, framework_config['version'], framework_config['option'])
+        except HTTPError as error:
+            log.info("Caught error: '{0}'".format(str(error)))
+            if "409" in str(error):
+                log.info("Gonna need to figure something out here.  Currently dumping cosmos info: " + api_session.cosmos.list_packages())
+            else:
+                raise error
 
         return installed_package.json()['appId']
 

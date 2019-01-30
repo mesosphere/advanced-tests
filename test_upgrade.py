@@ -236,7 +236,7 @@ def init_main_frameworks(dcos_api_session, dcoscli):
         'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
     }
 
-    @retrying.retry(wait_fixed=5000, stop_max_delay=20000)
+    @retrying.retry(wait_fixed=5000, stop_max_delay=40000)
     def install_framework(api_session, framework_package, framework_config):
         log.info("Installing {0} {1} with options: {2}".format(framework_package, framework_config['version'] or "(most recent version)", framework_config['option'] or '(none)'))
         try:
@@ -244,7 +244,7 @@ def init_main_frameworks(dcos_api_session, dcoscli):
         except HTTPError as error:
             log.info("Caught error: '{0}'".format(str(error)))
             if "409" in str(error):
-                log.info("Package is already installed.  Dumping cosmos info and returning generic package name: " + api_session.cosmos.list_packages())
+                #log.info("Package is already installed.  Dumping cosmos info and returning generic package name: " + api_session.cosmos.list_packages())
                 return "/{0}".format(framework_package)
             else:
                 raise error

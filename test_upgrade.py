@@ -244,7 +244,8 @@ def init_main_frameworks(dcos_api_session, dcoscli):
         except HTTPError as error:
             log.info("Caught error: '{0}'".format(str(error)))
             if "409" in str(error):
-                log.info("Gonna need to figure something out here.  Currently dumping cosmos info: " + api_session.cosmos.list_packages())
+                log.info("Package is already installed.  Dumping cosmos info and returning generic package name: " + api_session.cosmos.list_packages())
+                return "/{0}".format(framework_package)
             else:
                 raise error
 

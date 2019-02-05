@@ -24,6 +24,7 @@ import logging
 import math
 import os
 import pprint
+import time
 import uuid
 
 from dcos_test_utils import dcos_api, enterprise, helpers
@@ -409,7 +410,12 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     # this can be set after the fact because the upgrade metrics snapshot
     # endpoint is polled with verify=False
     if upgrade_session.default_url.scheme == 'https':
-        upgrade_session.set_ca_cert()
+        try:
+            upgrade_session.set_ca_cert()
+        except ConnectionError as ex:
+            # If the connection to the ca cert endpoint fails, wait 3 minutes in case the master isn't back up
+            time.sleep(180)
+            upgrade_session.set_ca_cert()
 
     # Now Re-auth with the new session
     upgrade_session.wait_for_dcos()

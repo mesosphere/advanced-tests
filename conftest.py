@@ -4,6 +4,7 @@ import os
 import time
 
 import pytest
+import retrying
 
 import dcos_launch.config
 import dcos_launch.util
@@ -101,3 +102,8 @@ def launcher(create_cluster, cluster_info_path):
     log.info("SSH Key for Debugging: '" + launcher.get_bootstrap_ssh_client().key + "'")
 
     return launcher
+
+
+@retrying.retry(wait_fixed=180000, stop_max_attempt_number=2)
+def set_ca_cert_for_session(session):
+    session.set_ca_cert()

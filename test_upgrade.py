@@ -24,7 +24,6 @@ import logging
 import math
 import os
 import pprint
-import time
 import uuid
 
 from conftest import set_ca_cert_for_session

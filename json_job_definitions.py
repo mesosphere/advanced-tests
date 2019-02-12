@@ -173,7 +173,7 @@ def spark_producer_job():
     return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s ' \
            '--conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=2 --conf ' \
            'spark.executor.cores=2 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --class KafkaRandomFeeder ' \
-           'http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5' \
+           'http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-2.3.2-20190211-9c0dd2e' \
            '.jar --appName Producer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,' \
            'kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,' \
            'kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --numberOfWords 3600 ' \
@@ -182,7 +182,7 @@ def spark_producer_job():
 
 @pytest.fixture(scope='session')
 def spark_consumer_job():
-    return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=1 --conf spark.executor.cores=1 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory --conf spark.cassandra.connection.port=9042 --class KafkaWordCount http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-20180523-fa29ab5.jar --appName Consumer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --groupId group1 --batchSizeSeconds 10 --cassandraKeyspace mykeyspace --cassandraTable mytable"'
+    return '"--conf spark.mesos.containerizer=mesos --conf spark.scheduler.maxRegisteredResourcesWaitingTime=2400s --conf spark.scheduler.minRegisteredResourcesRatio=1.0 --conf spark.cores.max=1 --conf spark.executor.cores=1 --conf spark.executor.mem=2g --conf spark.driver.mem=2g --conf spark.cassandra.connection.host=node-0-server.cassandra.autoip.dcos.thisdcos.directory --conf spark.cassandra.connection.port=9042 --class KafkaWordCount http://infinity-artifacts.s3.amazonaws.com/scale-tests/dcos-spark-scala-tests-assembly-2.3.2-20190211-9c0dd2e.jar --appName Consumer --brokers kafka-0-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-1-broker.kafka.autoip.dcos.thisdcos.directory:1025,kafka-2-broker.kafka.autoip.dcos.thisdcos.directory:1025 --topics mytopicC --groupId group1 --batchSizeSeconds 10 --cassandraKeyspace mykeyspace --cassandraTable mytable"'
 
 
 @pytest.fixture(scope='session')

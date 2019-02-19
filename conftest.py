@@ -106,4 +106,5 @@ def launcher(create_cluster, cluster_info_path):
 
 @retrying.retry(wait_fixed=180000, stop_max_attempt_number=2)
 def set_ca_cert_for_session(session):
-    session.set_ca_cert()
+    if session.default_url.scheme == 'https':
+        session.set_ca_cert()

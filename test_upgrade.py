@@ -26,6 +26,7 @@ import os
 import pprint
 import uuid
 
+from conftest import set_ca_cert_for_session
 from dcos_test_utils import dcos_api, enterprise, helpers
 import pytest
 import retrying
@@ -303,8 +304,8 @@ def use_pods():
 
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
-    if dcos_api_session.default_url.scheme == 'https':
-        dcos_api_session.set_ca_cert()
+    set_ca_cert_for_session(dcos_api_session)
+
     dcos_api_session.wait_for_dcos()
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
@@ -408,8 +409,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
     # this can be set after the fact because the upgrade metrics snapshot
     # endpoint is polled with verify=False
-    if upgrade_session.default_url.scheme == 'https':
-        upgrade_session.set_ca_cert()
+    set_ca_cert_for_session(upgrade_session)
 
     # Now Re-auth with the new session
     upgrade_session.wait_for_dcos()

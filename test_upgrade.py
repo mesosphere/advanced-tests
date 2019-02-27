@@ -26,6 +26,7 @@ import os
 import pprint
 import uuid
 
+from conftest import set_ca_cert_for_session
 from dcos_test_utils import dcos_api, enterprise, helpers
 import pytest
 import retrying
@@ -41,8 +42,10 @@ TEST_APP_NAME_FMT = 'upgrade-{}'
 
 @pytest.fixture(scope='session')
 def viplisten_app():
+    service_name = TEST_APP_NAME_FMT.format('viplisten-' + uuid.uuid4().hex)
+
     return {
-        "id": '/' + TEST_APP_NAME_FMT.format('viplisten-' + uuid.uuid4().hex),
+        "id": '/' + service_name,
         "cmd": '/usr/bin/nc -l -p $PORT0',
         "cpus": 0.1,
         "mem": 32,
@@ -61,7 +64,7 @@ def viplisten_app():
         "healthChecks": [{
             "protocol": "COMMAND",
             "command": {
-                "value": "/usr/bin/nslookup viplisten.marathon.l4lb.thisdcos.directory && pgrep -x /usr/bin/nc"
+                "value": "/usr/bin/nslookup " + service_name + ".marathon.autoip.dcos.thisdcos.directory && pgrep -x /usr/bin/nc"
             },
             "gracePeriodSeconds": 300,
             "intervalSeconds": 60,
@@ -301,8 +304,8 @@ def use_pods():
 
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
-    if dcos_api_session.default_url.scheme == 'https':
-        dcos_api_session.set_ca_cert()
+    set_ca_cert_for_session(dcos_api_session)
+
     dcos_api_session.wait_for_dcos()
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
@@ -406,8 +409,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
     # this can be set after the fact because the upgrade metrics snapshot
     # endpoint is polled with verify=False
-    if upgrade_session.default_url.scheme == 'https':
-        upgrade_session.set_ca_cert()
+    set_ca_cert_for_session(upgrade_session)
 
     # Now Re-auth with the new session
     upgrade_session.wait_for_dcos()

@@ -4,6 +4,7 @@ import os
 import time
 
 import pytest
+import retrying
 
 import dcos_launch.config
 import dcos_launch.util
@@ -87,12 +88,23 @@ def launcher(create_cluster, cluster_info_path):
         # basic wait to account for initial provisioning delay
         time.sleep(int(os.getenv("INITIAL_SLEEP", "180")))
         launcher.wait()
+        launcher.install_dcos()
     else:
         try:
             launcher = dcos_launch.get_launcher(json.load(open(launch_config_path, 'r')))
             launcher.wait()
+            launcher.install_dcos()
         except dcos_launch.util.LauncherError:
             raise AssertionError(
                 'Cluster creation was not specified with TEST_CREATE_CLUSTER, yet launcher '
                 'cannot reach the speficied cluster')
+
+    log.info("SSH Key for Debugging: '" + launcher.get_bootstrap_ssh_client().key + "'")
+
     return launcher
+
+
+@retrying.retry(wait_fixed=180000, stop_max_attempt_number=2)
+def set_ca_cert_for_session(session):
+    if session.default_url.scheme == 'https':
+        session.set_ca_cert()

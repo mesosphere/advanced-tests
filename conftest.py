@@ -10,6 +10,7 @@ import retrying
 from dcos_test_utils import dcos_api, enterprise, helpers, dcos_cli
 
 import pytest
+import retrying
 
 import dcos_launch.config
 import dcos_launch.util
@@ -108,6 +109,7 @@ def launcher(create_cluster, cluster_info_path):
 
     return launcher
 
+
 @pytest.fixture(scope='session')
 def onprem_cluster(launcher):
     if launcher.config['provider'] != 'onprem':
@@ -186,3 +188,9 @@ def find_app_port(config, app_name):
     """
     pattern = re.search(r'{0}(.+?)\n  bind .+:\d+'.format(app_name), config)
     return pattern.group()[-5:]
+
+
+@retrying.retry(wait_fixed=180000, stop_max_attempt_number=2)
+def set_ca_cert_for_session(session):
+    if session.default_url.scheme == 'https':
+        session.set_ca_cert()

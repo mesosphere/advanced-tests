@@ -26,6 +26,8 @@ import os
 import pprint
 
 import math
+from conftest import set_ca_cert_for_session
+from dcos_test_utils import dcos_api, enterprise, helpers
 import pytest
 import retrying
 import yaml
@@ -271,8 +273,8 @@ def init_main_frameworks(dcos_api_session, dcoscli):
 
 @pytest.fixture(scope='session')
 def setup_workload(dcos_api_session, dcoscli, viplisten_app, viptalk_app, healthcheck_app, dns_app, docker_pod, use_pods, spark_producer_job, spark_consumer_job, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
-    if dcos_api_session.default_url.scheme == 'https':
-        dcos_api_session.set_ca_cert()
+    set_ca_cert_for_session(dcos_api_session)
+
     dcos_api_session.wait_for_dcos()
 
     # Installing dcos-enterprise-cli to start our frameworks, and install various jobs.
@@ -368,8 +370,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
     # this can be set after the fact because the upgrade metrics snapshot
     # endpoint is polled with verify=False
-    if upgrade_session.default_url.scheme == 'https':
-        upgrade_session.set_ca_cert()
+    set_ca_cert_for_session(upgrade_session)
 
     # Now Re-auth with the new session
     upgrade_session.wait_for_dcos()

@@ -20,12 +20,16 @@ Optional
       before the upgrade begins
 """
 import copy
-import json
 import logging
 import os
 import pprint
+<<<<<<< HEAD
 
 import math
+=======
+import uuid
+
+>>>>>>> master
 from conftest import set_ca_cert_for_session
 from dcos_test_utils import dcos_api, enterprise, helpers
 import pytest
@@ -34,11 +38,235 @@ import yaml
 from requests import HTTPError
 
 import upgrade
+<<<<<<< HEAD
 from conftest import wait_for_dns, make_dcos_api_session
 from json_job_definitions import spark_consumer_job, spark_producer_job, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc
 
 log = logging.getLogger(__name__)
 
+=======
+
+log = logging.getLogger(__name__)
+
+TEST_APP_NAME_FMT = 'upgrade-{}'
+
+
+@pytest.fixture(scope='session')
+def viplisten_app():
+    service_name = TEST_APP_NAME_FMT.format('viplisten-' + uuid.uuid4().hex)
+
+    return {
+        "id": '/' + service_name,
+        "cmd": '/usr/bin/nc -l -p $PORT0',
+        "cpus": 0.1,
+        "mem": 32,
+        "instances": 1,
+        "container": {
+            "type": "MESOS",
+            "docker": {
+                "image": "alpine:3.5"
+            }
+        },
+        'portDefinitions': [{
+            'labels': {
+                'VIP_0': '/viplisten:5000'
+            }
+        }],
+        "healthChecks": [{
+            "protocol": "COMMAND",
+            "command": {
+                "value": "/usr/bin/nslookup " + service_name + ".marathon.autoip.dcos.thisdcos.directory && pgrep -x /usr/bin/nc"
+            },
+            "gracePeriodSeconds": 300,
+            "intervalSeconds": 60,
+            "timeoutSeconds": 20,
+            "maxConsecutiveFailures": 10
+        }]
+    }
+
+
+@pytest.fixture(scope='session')
+def viptalk_app():
+    return {
+        "id": '/' + TEST_APP_NAME_FMT.format('viptalk-' + uuid.uuid4().hex),
+        "cmd": "/usr/bin/nc viplisten.marathon.l4lb.thisdcos.directory 5000 < /dev/zero",
+        "cpus": 0.1,
+        "mem": 32,
+        "instances": 1,
+        "container": {
+            "type": "MESOS",
+            "docker": {
+                "image": "alpine:3.5"
+            }
+        },
+        "healthChecks": [{
+            "protocol": "COMMAND",
+            "command": {
+                "value": "pgrep -x /usr/bin/nc && sleep 5 && pgrep -x /usr/bin/nc"
+            },
+            "gracePeriodSeconds": 300,
+            "intervalSeconds": 60,
+            "timeoutSeconds": 20,
+            "maxConsecutiveFailures": 10
+        }]
+    }
+
+
+@pytest.fixture(scope='session')
+def healthcheck_app():
+    # HTTP healthcheck app to make sure tasks are reachable during the upgrade.
+    # If a task fails its healthcheck, Marathon will terminate it and we'll
+    # notice it was killed when we check tasks on exit.
+    return {
+        "id": '/' + TEST_APP_NAME_FMT.format('healthcheck-' + uuid.uuid4().hex),
+        "cmd": "python3 -m http.server 8080",
+        "cpus": 0.5,
+        "mem": 32.0,
+        "instances": 1,
+        "container": {
+            "type": "DOCKER",
+            "docker": {
+                "image": "python:3",
+                "network": "BRIDGE",
+                "portMappings": [
+                    {"containerPort": 8080, "hostPort": 0}
+                ]
+            }
+        },
+        "healthChecks": [
+            {
+                "protocol": "HTTP",
+                "path": "/",
+                "portIndex": 0,
+                "gracePeriodSeconds": 300,
+                "intervalSeconds": 60,
+                "timeoutSeconds": 20,
+                "maxConsecutiveFailures": 10
+            }
+        ],
+    }
+
+
+@pytest.fixture(scope='session')
+def dns_app(healthcheck_app):
+    # DNS resolution app to make sure DNS is available during the upgrade.
+    # Periodically resolves the healthcheck app's domain name and logs whether
+    # it succeeded to a file in the Mesos sandbox.
+    healthcheck_app_id = healthcheck_app['id'].lstrip('/')
+    return {
+        "id": '/' + TEST_APP_NAME_FMT.format('dns-' + uuid.uuid4().hex),
+        "cmd": """
+while true
+do
+    printf "%s " $(date --utc -Iseconds) >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
+    if host -W $TIMEOUT_SECONDS $RESOLVE_NAME
+    then
+        echo SUCCESS >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
+    else
+        echo FAILURE >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
+    fi
+    sleep $INTERVAL_SECONDS
+done
+""",
+        "env": {
+            'RESOLVE_NAME': helpers.marathon_app_id_to_mesos_dns_subdomain(healthcheck_app_id) + '.marathon.mesos',
+            'DNS_LOG_FILENAME': 'dns_resolve_log.txt',
+            'INTERVAL_SECONDS': '1',
+            'TIMEOUT_SECONDS': '1',
+        },
+        "cpus": 0.5,
+        "mem": 32.0,
+        "instances": 1,
+        "container": {
+            "type": "DOCKER",
+            "docker": {
+                "image": "branden/bind-utils",
+                "network": "BRIDGE",
+            }
+        },
+        "dependencies": [healthcheck_app_id],
+    }
+
+
+@pytest.fixture(scope='session')
+def docker_pod():
+    return {
+        'id': '/' + TEST_APP_NAME_FMT.format('docker-pod-' + uuid.uuid4().hex),
+        'scaling': {'kind': 'fixed', 'instances': 1},
+        'environment': {'PING': 'PONG'},
+        'containers': [
+            {
+                'name': 'container1',
+                'resources': {'cpus': 0.1, 'mem': 32},
+                'image': {'kind': 'DOCKER', 'id': 'debian:jessie'},
+                'exec': {'command': {'shell': 'while true; do sleep 1; done'}},
+                'healthcheck': {'command': {'shell': 'sleep 1'}}
+            },
+            {
+                'name': 'container2',
+                'resources': {'cpus': 0.1, 'mem': 32},
+                'exec': {'command': {'shell': 'echo $PING > foo; while true; do sleep 1; done'}},
+                'healthcheck': {'command': {'shell': 'test $PING = `cat foo`'}}
+            }
+        ],
+        'networks': [{'mode': 'host'}]
+    }
+
+
+@pytest.fixture(scope='session')
+def onprem_cluster(launcher):
+    if launcher.config['provider'] != 'onprem':
+        pytest.skip('Only onprem provider is supported for upgrades!')
+    return launcher.get_onprem_cluster()
+
+
+@pytest.fixture(scope='session')
+def is_enterprise():
+    return os.getenv('TEST_UPGRADE_ENTERPRISE', 'false') == 'true'
+
+
+@pytest.fixture(scope='session')
+def dcos_api_session(onprem_cluster, launcher, is_enterprise):
+    """ The API session for the cluster at the beginning of the upgrade
+    This will be used to start tasks and poll the metrics snapshot endpoint
+    """
+    return make_dcos_api_session(
+        onprem_cluster, launcher, is_enterprise, launcher.config['dcos_config'].get('security'))
+
+
+def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool = False, security_mode=None):
+    ssl_enabled = security_mode in ('strict', 'permissive')
+    args = {
+        'dcos_url': 'http://' + onprem_cluster.masters[0].public_ip,
+        'masters': [m.public_ip for m in onprem_cluster.masters],
+        'slaves': [m.public_ip for m in onprem_cluster.private_agents],
+        'public_slaves': [m.public_ip for m in onprem_cluster.public_agents],
+        'auth_user': dcos_api.DcosUser(helpers.CI_CREDENTIALS),
+        'exhibitor_admin_password': launcher.config['dcos_config'].get('exhibitor_admin_password')}
+
+    if is_enterprise:
+        api_class = enterprise.EnterpriseApiSession
+        args['auth_user'] = enterprise.EnterpriseUser(
+            os.getenv('DCOS_LOGIN_UNAME', 'bootstrapuser'),
+            os.getenv('DCOS_LOGIN_PW', 'deleteme'))
+        if ssl_enabled:
+            args['dcos_url'] = args['dcos_url'].replace('http', 'https')
+    else:
+        api_class = dcos_api.DcosApiSession
+
+    return api_class(**args)
+
+
+@retrying.retry(
+    wait_fixed=(1 * 1000),
+    stop_max_delay=(120 * 1000),
+    retry_on_result=lambda x: not x)
+def wait_for_dns(dcos_api_session, hostname):
+    """Return True if Mesos-DNS has at least one entry for hostname."""
+    hosts = dcos_api_session.get('/mesos_dns/v1/hosts/' + hostname).json()
+    return any(h['host'] != '' and h['ip'] != '' for h in hosts)
+
+>>>>>>> master
 
 def get_master_task_state(dcos_api_session, task_id):
     """Returns the JSON blob associated with the task from /master/state."""
@@ -85,6 +313,7 @@ def parse_dns_log(dns_log_content):
 def use_pods():
     return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
+<<<<<<< HEAD
 
 def wait_for_frameworks_to_deploy(dcoscli):
     """Waits for cassandra and kafka to finish deploying"""
@@ -174,6 +403,14 @@ def start_spark_jobs(dcoscli, spark_producer_job, spark_consumer_job):
 
 
 def start_marathon_apps(dcos_api_session, viplisten_app, viptalk_app, healthcheck_app, dns_app, docker_pod, use_pods):
+=======
+
+@pytest.fixture(scope='session')
+def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
+    set_ca_cert_for_session(dcos_api_session)
+
+    dcos_api_session.wait_for_dcos()
+>>>>>>> master
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
     log.info("Launching viplisten_app")
@@ -310,7 +547,7 @@ def setup_workload(dcos_api_session, dcoscli, viplisten_app, viptalk_app, health
     # See this issue for why we check for a difference:
     # https://issues.apache.org/jira/browse/MESOS-1718
     task_state_start = get_master_task_state(dcos_api_session, tasks_start[test_app_ids[0]][0])
-    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids
+    return test_app_ids, test_pod_ids, tasks_start, task_state_start
 
 
 @pytest.fixture(scope='session')
@@ -378,6 +615,7 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
 
 class TestUpgrade:
+<<<<<<< HEAD
     def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload, dcos_api_session):
         """
         This test is to verify that certain jobs that we started prior to upgrading have continued to function through
@@ -393,6 +631,10 @@ class TestUpgrade:
         for test_app in test_app_ids:
             dcos_api_session.marathon.wait_for_app_deployment(test_app, 1, False, True, 300)
 
+=======
+    def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload):
+        test_app_ids, test_pod_ids, tasks_start, _ = setup_workload
+>>>>>>> master
         app_tasks_end = {app_id: sorted(app_task_ids(upgraded_dcos, app_id)) for app_id in test_app_ids}
         tasks_end = {**app_tasks_end}
         if use_pods:
@@ -418,11 +660,10 @@ class TestUpgrade:
             else:
                 return subset == superset
 
-        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
+        test_app_ids, test_pod_ids, tasks_start, task_state_start = setup_workload
         task_state_end = get_master_task_state(upgraded_dcos, tasks_start[test_app_ids[0]][0])
         assert is_contained(task_state_start, task_state_end), '{}\n\n{}'.format(task_state_start, task_state_end)
 
-    @pytest.mark.xfail
     def test_app_dns_survive(self, upgraded_dcos, dns_app):
         marathon_framework_id = upgraded_dcos.marathon.get('/v2/info').json()['frameworkId']
         dns_app_task = upgraded_dcos.marathon.get('/v2/apps' + dns_app['id'] + '/tasks').json()['tasks'][0]
@@ -432,6 +673,7 @@ class TestUpgrade:
             dns_app_task['id'],
             dns_app['env']['DNS_LOG_FILENAME']))
         dns_failure_times = [entry[0] for entry in dns_log if entry[1] != 'SUCCESS']
+<<<<<<< HEAD
         assert len(dns_failure_times) == 0, 'Failed to resolve Marathon app hostname {hostname} at least once' \
             'Hostname failed to resolve at these times:\n{failures}'.format(
                 hostname=dns_app()['env']['RESOLVE_NAME'],
@@ -476,3 +718,9 @@ class TestUpgrade:
 
             dcos_api_session.marathon.wait_for_app_deployment(marathon_app, 4, True, True, 300)
             assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, True)
+=======
+        assert len(dns_failure_times) <= 180, 'Failed to resolve Marathon app hostname {hostname} at least once' \
+                                              'Hostname failed to resolve at these times:\n{failures}'.format(
+            hostname=dns_app['env']['RESOLVE_NAME'],
+            failures='\n'.join(dns_failure_times))
+>>>>>>> master

@@ -419,7 +419,7 @@ class TestUpgrade:
             else:
                 return subset == superset
 
-        test_app_ids, test_pod_ids, tasks_start, task_state_start = setup_workload
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, _ = setup_workload
         task_state_end = get_master_task_state(upgraded_dcos, tasks_start[test_app_ids[0]][0])
         assert is_contained(task_state_start, task_state_end), '{}\n\n{}'.format(task_state_start, task_state_end)
 

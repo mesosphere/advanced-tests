@@ -312,7 +312,7 @@ def setup_workload(dcos_api_session, dcoscli, viplisten_app, viptalk_app, health
     # See this issue for why we check for a difference:
     # https://issues.apache.org/jira/browse/MESOS-1718
     task_state_start = get_master_task_state(dcos_api_session, tasks_start[test_app_ids[0]][0])
-    return test_app_ids, test_pod_ids, tasks_start, task_state_start
+    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids
 
 
 @pytest.fixture(scope='session')

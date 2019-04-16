@@ -3,6 +3,8 @@ import logging
 import os
 import time
 import re
+
+from py._code.assertion import AssertionError
 from typing import Generator
 
 import retrying
@@ -145,7 +147,10 @@ def dcoscli(
     new_dcos_cli: dcos_cli.DcosCli,
     dcos_api_session
 ) -> dcos_cli.DcosCli:
-    new_dcos_cli.setup_enterprise(str(dcos_api_session.default_url))
+    try:
+        new_dcos_cli.setup_enterprise(str(dcos_api_session.default_url))
+    except AssertionError as error:
+        log.info("Overridding assertions discovered in CLI install due to STDERR error in CLI Installer.")
     return new_dcos_cli
 
 

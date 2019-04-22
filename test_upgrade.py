@@ -45,31 +45,25 @@ def viplisten_app():
 
     return {
         "id": '/' + service_name,
-        "cmd": '/usr/bin/nc -l -p $PORT0',
-        "cpus": 0.1,
-        "mem": 32,
         "instances": 1,
+        "portDefinitions": [
+            {
+                "labels": {
+                    "VIP_0": "/viplisten:5000"
+                },
+                "name": "server",
+                "protocol": "tcp",
+            }
+        ],
         "container": {
             "type": "MESOS",
             "docker": {
-                "image": "alpine:3.5"
+                "image": "library/python:3"
             }
         },
-        'portDefinitions': [{
-            'labels': {
-                'VIP_0': '/viplisten:5000'
-            }
-        }],
-        "healthChecks": [{
-            "protocol": "COMMAND",
-            "command": {
-                "value": "/usr/bin/nslookup " + service_name + ".marathon.autoip.dcos.thisdcos.directory && pgrep -x /usr/bin/nc"
-            },
-            "gracePeriodSeconds": 300,
-            "intervalSeconds": 60,
-            "timeoutSeconds": 20,
-            "maxConsecutiveFailures": 10
-        }]
+        "cpus": 0.1,
+        "mem": 32,
+        "cmd": "python3 -m http.server $PORT0"
     }
 
 
@@ -77,26 +71,20 @@ def viplisten_app():
 def viptalk_app():
     return {
         "id": '/' + TEST_APP_NAME_FMT.format('viptalk-' + uuid.uuid4().hex),
-        "cmd": "/usr/bin/nc viplisten.marathon.l4lb.thisdcos.directory 5000 < /dev/zero",
-        "cpus": 0.1,
-        "mem": 32,
-        "instances": 1,
+        "cmd": "while true; do echo \"Sleeping...\"; sleep 5; echo -n \"Checking ...\"; /opt/mesosphere/bin/curl -s -o /dev/null -I -w \"%{http_code}\" http://viplisten.marathon.l4lb.thisdcos.directory:5000; echo \" ok\"; done",
         "container": {
             "type": "MESOS",
-            "docker": {
-                "image": "alpine:3.5"
-            }
+            "volumes": [
+                {
+                    "containerPath": "/opt/mesosphere/bin",
+                    "hostPath": "/opt/mesosphere/bin",
+                    "mode": "RO"
+                }
+            ]
         },
-        "healthChecks": [{
-            "protocol": "COMMAND",
-            "command": {
-                "value": "pgrep -x /usr/bin/nc && sleep 5 && pgrep -x /usr/bin/nc"
-            },
-            "gracePeriodSeconds": 300,
-            "intervalSeconds": 60,
-            "timeoutSeconds": 20,
-            "maxConsecutiveFailures": 10
-        }]
+        "cpus": 0.1,
+        "instances": 1,
+        "mem": 32
     }
 
 

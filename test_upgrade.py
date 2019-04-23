@@ -67,7 +67,7 @@ def viplisten_app():
         "healthChecks": [{
             "protocol": "COMMAND",
             "command": {
-                "value": "pgrep -x /usr/bin/nc && sleep 5 && pgrep -x /usr/bin/nc"
+                "value": "return 0"
             },
             "gracePeriodSeconds": 300,
             "intervalSeconds": 60,

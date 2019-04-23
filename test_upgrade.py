@@ -52,7 +52,7 @@ def viplisten_app():
                     "VIP_0": "/viplisten:5000"
                 },
                 "name": "server",
-                "protocol": "tcp",
+                "protocol": "tcp"
             }
         ],
         "container": {
@@ -63,7 +63,17 @@ def viplisten_app():
         },
         "cpus": 0.1,
         "mem": 32,
-        "cmd": "python3 -m http.server $PORT0"
+        "cmd": "python3 -m http.server $PORT0",
+        "healthChecks": [{
+            "protocol": "COMMAND",
+            "command": {
+                "value": "pgrep -x /usr/bin/nc && sleep 5 && pgrep -x /usr/bin/nc"
+            },
+            "gracePeriodSeconds": 300,
+            "intervalSeconds": 60,
+            "timeoutSeconds": 20,
+            "maxConsecutiveFailures": 10
+        }]
     }
 
 
@@ -84,7 +94,17 @@ def viptalk_app():
         },
         "cpus": 0.1,
         "instances": 1,
-        "mem": 32
+        "mem": 32,
+        "healthChecks": [{
+            "protocol": "COMMAND",
+            "command": {
+                "value": "pgrep -x /usr/bin/nc && sleep 5 && pgrep -x /usr/bin/nc"
+            },
+            "gracePeriodSeconds": 300,
+            "intervalSeconds": 60,
+            "timeoutSeconds": 20,
+            "maxConsecutiveFailures": 10
+        }]
     }
 
 

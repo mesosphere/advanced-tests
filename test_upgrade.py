@@ -45,7 +45,23 @@ def viplisten_app():
 
     return {
         "id": '/' + service_name,
+        "cmd": "python3 -m http.server $PORT0",
+        "container": {
+            "type": "MESOS",
+            "docker": {
+                "image": "library/python:3",
+            }
+        },
+        "cpus": 0.1,
+        "healthChecks": [
+            {
+                "portIndex": 0,
+                "protocol": "MESOS_HTTP",
+                "path": "/"
+            }
+        ],
         "instances": 1,
+        "mem": 32,
         "portDefinitions": [
             {
                 "labels": {
@@ -54,26 +70,7 @@ def viplisten_app():
                 "name": "server",
                 "protocol": "tcp"
             }
-        ],
-        "container": {
-            "type": "MESOS",
-            "docker": {
-                "image": "library/python:3"
-            }
-        },
-        "cpus": 0.1,
-        "mem": 32,
-        "cmd": "python3 -m http.server $PORT0",
-        "healthChecks": [{
-            "protocol": "COMMAND",
-            "command": {
-                "value": "return 0"
-            },
-            "gracePeriodSeconds": 300,
-            "intervalSeconds": 60,
-            "timeoutSeconds": 20,
-            "maxConsecutiveFailures": 10
-        }]
+        ]
     }
 
 
@@ -92,19 +89,17 @@ def viptalk_app():
                 }
             ]
         },
-        "cpus": 0.1,
+        "healthChecks": [
+            {
+                "protocol": "COMMAND",
+                "command": {
+                    "value": "exit 0"
+                }
+            }
+        ],
         "instances": 1,
-        "mem": 32,
-        "healthChecks": [{
-            "protocol": "COMMAND",
-            "command": {
-                "value": "pgrep -x /usr/bin/nc && sleep 5 && pgrep -x /usr/bin/nc"
-            },
-            "gracePeriodSeconds": 300,
-            "intervalSeconds": 60,
-            "timeoutSeconds": 20,
-            "maxConsecutiveFailures": 10
-        }]
+        "cpus": 0.1,
+        "mem": 32
     }
 
 

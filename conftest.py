@@ -148,6 +148,7 @@ def dcoscli(
     dcos_api_session
 ) -> dcos_cli.DcosCli:
     try:
+        log.info("Installing the CLI.")
         new_dcos_cli.setup_enterprise(str(dcos_api_session.default_url))
     except AssertionError as error:
         log.info("Overridding assertions discovered in CLI install due to STDERR error in CLI Installer.")

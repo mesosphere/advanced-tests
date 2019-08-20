@@ -7,6 +7,8 @@ long time to run.
 
 import json
 import logging
+import uuid
+from passlib.hash import sha512_crypt
 from pathlib import Path
 from subprocess import CalledProcessError
 from textwrap import dedent
@@ -415,6 +417,188 @@ class TestUpgrade:
                 build = node.dcos_build_info()
                 assert build.version.startswith('1.13')
                 assert build.variant == DCOSVariant.OSS
+
+    def test_upgrade_from_path_1_13_1_14(
+        self,
+        cluster_backend: ClusterBackend,
+        oss_1_13_installer: Path,
+        oss_1_14_installer: Path,
+    ) -> None:
+        """
+        DC/OS OSS can be upgraded from 1.13 to 1.14 from a local installer.
+        """
+        with Cluster(cluster_backend=cluster_backend) as cluster:
+            cluster.install_dcos_from_path(
+                dcos_installer=oss_1_13_installer,
+                dcos_config=cluster.base_config,
+                ip_detect_path=cluster_backend.ip_detect_path,
+                output=Output.LOG_AND_CAPTURE,
+            )
+            cluster.wait_for_dcos_oss()
+
+            for node in {
+                *cluster.masters,
+                *cluster.agents,
+                *cluster.public_agents,
+            }:
+                build = node.dcos_build_info()
+                assert build.version.startswith('1.13')
+                assert build.variant == DCOSVariant.OSS
+
+            cluster.upgrade_dcos_from_path(
+                dcos_installer=oss_1_14_installer,
+                dcos_config=cluster.base_config,
+                ip_detect_path=cluster_backend.ip_detect_path,
+                output=Output.LOG_AND_CAPTURE,
+            )
+
+            cluster.wait_for_dcos_oss()
+            for node in {
+                *cluster.masters,
+                *cluster.agents,
+                *cluster.public_agents,
+            }:
+                build = node.dcos_build_info()
+                assert build.version.startswith('1.14')
+                assert build.variant == DCOSVariant.OSS
+
+    def test_upgrade_ee_from_path_1_12_1_13(
+        self,
+        cluster_backend: ClusterBackend,
+        enterprise_1_12_installer: Path,
+        enterprise_1_13_installer: Path,
+        license_key_contents: str,
+    ) -> None:
+        """
+        DC/OS EE can be upgraded from 1.12 to 1.13 from a local installer.
+        """
+        superuser_username = str(uuid.uuid4())
+        superuser_password = str(uuid.uuid4())
+
+        config = {
+            'superuser_username': superuser_username,
+            'superuser_password_hash': sha512_crypt.hash(superuser_password),
+            'security': 'strict',
+            'fault_domain_enabled': False,
+            'license_key_contents': license_key_contents,
+        }
+
+        with Cluster(cluster_backend=cluster_backend) as cluster:
+            cluster.install_dcos_from_path(
+                dcos_installer=enterprise_1_12_installer,
+                dcos_config={
+                    **cluster.base_config,
+                    **config,
+                },
+                ip_detect_path=cluster_backend.ip_detect_path,
+                output=Output.LOG_AND_CAPTURE,
+            )
+            cluster.wait_for_dcos_ee(
+                superuser_username=superuser_username,
+                superuser_password=superuser_password,
+            )
+
+            for node in {
+                *cluster.masters,
+                *cluster.agents,
+                *cluster.public_agents,
+            }:
+                build = node.dcos_build_info()
+                assert build.version.startswith('1.12')
+                assert build.variant == DCOSVariant.ENTERPRISE
+
+            cluster.upgrade_dcos_from_path(
+                dcos_installer=enterprise_1_13_installer,
+                dcos_config={
+                    **cluster.base_config,
+                    **config,
+                },
+                ip_detect_path=cluster_backend.ip_detect_path,
+                output=Output.LOG_AND_CAPTURE,
+            )
+
+            cluster.wait_for_dcos_ee(
+                superuser_username=superuser_username,
+                superuser_password=superuser_password,
+            )
+
+            for node in {
+                *cluster.masters,
+                *cluster.agents,
+                *cluster.public_agents,
+            }:
+                build = node.dcos_build_info()
+                assert build.version.startswith('1.13')
+                assert build.variant == DCOSVariant.ENTERPRISE
+
+    def test_upgrade_ee_from_path_1_13_1_14(
+        self,
+        cluster_backend: ClusterBackend,
+        enterprise_1_13_installer: Path,
+        enterprise_1_14_installer: Path,
+        license_key_contents: str,
+    ) -> None:
+        """
+        DC/OS EE can be upgraded from 1.13 to 1.14 from a local installer.
+        """
+        superuser_username = str(uuid.uuid4())
+        superuser_password = str(uuid.uuid4())
+
+        config = {
+            'superuser_username': superuser_username,
+            'superuser_password_hash': sha512_crypt.hash(superuser_password),
+            'security': 'strict',
+            'fault_domain_enabled': False,
+            'license_key_contents': license_key_contents,
+        }
+
+        with Cluster(cluster_backend=cluster_backend) as cluster:
+            cluster.install_dcos_from_path(
+                dcos_installer=enterprise_1_13_installer,
+                dcos_config={
+                    **cluster.base_config,
+                    **config,
+                },
+                ip_detect_path=cluster_backend.ip_detect_path,
+                output=Output.LOG_AND_CAPTURE,
+            )
+            cluster.wait_for_dcos_ee(
+                superuser_username=superuser_username,
+                superuser_password=superuser_password,
+            )
+
+            for node in {
+                *cluster.masters,
+                *cluster.agents,
+                *cluster.public_agents,
+            }:
+                build = node.dcos_build_info()
+                assert build.version.startswith('1.13')
+                assert build.variant == DCOSVariant.ENTERPRISE
+
+            cluster.upgrade_dcos_from_path(
+                dcos_installer=enterprise_1_14_installer,
+                dcos_config={
+                    **cluster.base_config,
+                    **config,
+                },
+                ip_detect_path=cluster_backend.ip_detect_path,
+                output=Output.LOG_AND_CAPTURE,
+            )
+
+            cluster.wait_for_dcos_ee(
+                superuser_username=superuser_username,
+                superuser_password=superuser_password,
+            )
+
+            for node in {
+                *cluster.masters,
+                *cluster.agents,
+                *cluster.public_agents,
+            }:
+                build = node.dcos_build_info()
+                assert build.version.startswith('1.14')
+                assert build.variant == DCOSVariant.ENTERPRISE
 
     def test_upgrade_from_url(
         self,

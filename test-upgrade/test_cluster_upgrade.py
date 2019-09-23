@@ -52,7 +52,7 @@ class TestUpgradeTests:
                 build = node.dcos_build_info()
                 assert build.version.startswith(ee_artifact_url.split('/')[-2])
                 # assert build.version.startswith('1.12')
-                assert build.variant == DCOSVariant.OSS
+                assert build.variant == DCOSVariant.ENTERPRISE
 
             cluster.upgrade_dcos_from_url(
                 dcos_installer=ee_upgrade_artifact_url,

@@ -73,6 +73,4 @@ def license_key_contents() -> str:
     """
     Return the contents of the license file.
     """
-    with open(os.environ['EE_DCOS_E2E_LICENSE_FILE'], 'r') as f:
-        license_file = f.read()
-    return license_file
+    return os.environ['DCOS_LICENSE']

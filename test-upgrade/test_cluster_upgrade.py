@@ -39,7 +39,10 @@ class TestUpgradeTests:
                 output=Output.LOG_AND_CAPTURE,
                 ip_detect_path=docker_backend.ip_detect_path,
             )
-            cluster.wait_for_dcos_ee()
+            cluster.wait_for_dcos_ee(
+                superuser_username=superuser_username,
+                superuser_password=superuser_password,
+            )
 
             for node in {
                 *cluster.masters,
@@ -58,7 +61,10 @@ class TestUpgradeTests:
                 output=Output.LOG_AND_CAPTURE,
             )
 
-            cluster.wait_for_dcos_ee()
+            cluster.wait_for_dcos_ee(
+                superuser_username=superuser_username,
+                superuser_password=superuser_password,
+            )
             for node in {
                 *cluster.masters,
                 *cluster.agents,

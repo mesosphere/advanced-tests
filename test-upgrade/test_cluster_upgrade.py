@@ -26,6 +26,7 @@ class TestUpgradeTests:
         extra_config = {
             'superuser_username': superuser_username,
             'superuser_password_hash': sha512_crypt.hash(superuser_password),
+            'security': 'strict',
             'fault_domain_enabled': False,
             'license_key_contents': license_key_contents,
         }
@@ -56,7 +57,10 @@ class TestUpgradeTests:
 
             cluster.upgrade_dcos_from_url(
                 dcos_installer=ee_upgrade_artifact_url,
-                dcos_config=cluster.base_config,
+                dcos_config={
+                    **cluster.base_config,
+                    **extra_config,
+                },
                 ip_detect_path=docker_backend.ip_detect_path,
                 output=Output.LOG_AND_CAPTURE,
             )

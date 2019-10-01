@@ -83,9 +83,19 @@ def upgrade_dcos(
             ['sudo', 'bash', installer_path, '--version']).decode('utf-8'))['version']
         use_node_upgrade_script = not upgrade_version.startswith('1.8')
         if use_node_upgrade_script:
-            upgrade_script_url = tunnel.command(
+            tunnel_command = tunnel.command(
                 ['sudo', 'bash', installer_path, '--generate-node-upgrade-script ' + starting_version]
-            ).decode('utf-8').splitlines()[-1].split("Node upgrade script URL: ", 1)[1]
+            )
+            log.info(str(tunnel_command))
+            decoded_string = tunnel_command.decode('utf-8')
+            log.info(decoded_string)
+            split_lines = decoded_string.splitlines()
+            log.info(split_lines)
+            first_line = split_lines[-1]
+            log.info(first_line)
+            split_in_words = first_line.split("Node upgrade script URL: ", 1)
+            log.info(split_in_words)
+            upgrade_script_url = split_in_words[1]
         else:
             tunnel.command(['sudo', 'bash', installer_path, '--genconf'])
             upgrade_script_url = 'http://' + bootstrap_host + '/dcos_install.sh'

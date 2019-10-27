@@ -50,9 +50,12 @@ class TestUpgradeTests:
                 *cluster.agents,
                 *cluster.public_agents,
             }:
+                upgrade_from_ver = ee_artifact_url.split('/')[-2]
+                maj, min, *_ = upgrade_from_ver.split('.')
+                upgrade_to_ver = maj + '.' + str(int(min) + 1)
+
                 build = node.dcos_build_info()
-                assert build.version.startswith(ee_artifact_url.split('/')[-2])
-                # assert build.version.startswith('1.12')
+                assert build.version.startswith(upgrade_from_ver)
                 assert build.variant == DCOSVariant.ENTERPRISE
 
             cluster.upgrade_dcos_from_url(
@@ -75,6 +78,5 @@ class TestUpgradeTests:
                 *cluster.public_agents,
             }:
                 build = node.dcos_build_info()
-                assert build.version.startswith(ee_upgrade_artifact_url.split('/')[-2])
-                # assert build.version.startswith('1.13')
+                assert build.version.startswith(upgrade_to_ver)
                 assert build.variant == DCOSVariant.ENTERPRISE

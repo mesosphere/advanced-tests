@@ -86,25 +86,25 @@ TEST_LAUNCH_CONFIG_INSTALLER_URL=http://downloads.mesosphere.com/dcos-enterprise
 TEST_UPGRADE_USE_CHECKS=true
 TEST_UPGRADE_USE_PODS=true
 TEST_UPGRADE_ENTERPRISE=false
-TEST_UPGRADE_INSTALLER_URL=https://downloads.dcos.io/dcos/stable/1.12.3/dcos_generate_config.sh
+TEST_UPGRADE_INSTALLER_URL=https://downloads.dcos.io/dcos/stable/1.12.4/dcos_generate_config.sh
 
 [upgrade-to-1.12-ee]
 TEST_UPGRADE_USE_CHECKS=true
 TEST_UPGRADE_USE_PODS=true
 TEST_UPGRADE_ENTERPRISE=true
-TEST_UPGRADE_INSTALLER_URL=http://downloads.mesosphere.com/dcos-enterprise/stable/1.12.3/dcos_generate_config.ee.sh
+TEST_UPGRADE_INSTALLER_URL=http://downloads.mesosphere.com/dcos-enterprise/stable/1.12.4/dcos_generate_config.ee.sh
 
 [upgrade-from-1.12-open]
 TEST_UPGRADE_USE_CHECKS=true
 TEST_UPGRADE_USE_PODS=true
 TEST_UPGRADE_ENTERPRISE=false
-TEST_LAUNCH_CONFIG_INSTALLER_URL=https://downloads.dcos.io/dcos/stable/1.12.3/dcos_generate_config.sh
+TEST_LAUNCH_CONFIG_INSTALLER_URL=https://downloads.dcos.io/dcos/stable/1.12.4/dcos_generate_config.sh
 
 [upgrade-from-1.12-ee]
 TEST_UPGRADE_USE_CHECKS=true
 TEST_UPGRADE_USE_PODS=true
 TEST_UPGRADE_ENTERPRISE=true
-TEST_LAUNCH_CONFIG_INSTALLER_URL=http://downloads.mesosphere.com/dcos-enterprise/stable/1.12.3/dcos_generate_config.ee.sh
+TEST_LAUNCH_CONFIG_INSTALLER_URL=http://downloads.mesosphere.com/dcos-enterprise/stable/1.12.4/dcos_generate_config.ee.sh
 
 [upgrade-to-1.13-open]
 TEST_UPGRADE_USE_CHECKS=true

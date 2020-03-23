@@ -39,6 +39,18 @@ def reset_bootstrap_host(ssh: ssh_client.SshClient, bootstrap_host: str):
         t.command(['sudo', 'rm', '-rf', os.path.join(home_dir, 'genconf*'), os.path.join(home_dir, 'dcos*')])
 
 
+def get_upgrade_script_url(command_results: str):
+    decoded_string = command_results.decode('utf-8')
+    split_lines = decoded_string.splitlines()
+    for line in split_lines:
+        if "Node upgrade script URL: " in line:
+            url_line = line
+    log.info(url_line)
+    split_in_words = url_line.split("Node upgrade script URL: ", 1)
+    log.info(split_in_words)
+    return split_in_words[1]
+
+
 def upgrade_dcos(
         dcos_api_session: dcos_api.DcosApiSession,
         onprem_cluster: onprem.OnpremCluster,
@@ -83,9 +95,10 @@ def upgrade_dcos(
             ['sudo', 'bash', installer_path, '--version']).decode('utf-8'))['version']
         use_node_upgrade_script = not upgrade_version.startswith('1.8')
         if use_node_upgrade_script:
-            upgrade_script_url = tunnel.command(
+            tunnel_command = tunnel.command(
                 ['sudo', 'bash', installer_path, '--generate-node-upgrade-script ' + starting_version]
-            ).decode('utf-8').splitlines()[-1].split("Node upgrade script URL: ", 1)[1]
+            )
+            upgrade_script_url = get_upgrade_script_url(tunnel_command)
         else:
             tunnel.command(['sudo', 'bash', installer_path, '--genconf'])
             upgrade_script_url = 'http://' + bootstrap_host + '/dcos_install.sh'

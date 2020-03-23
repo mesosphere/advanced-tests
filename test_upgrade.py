@@ -20,10 +20,12 @@ Optional
       before the upgrade begins
 """
 import copy
+import json
 import logging
-import math
 import os
 import pprint
+
+import math
 import uuid
 
 from conftest import set_ca_cert_for_session
@@ -31,231 +33,14 @@ from dcos_test_utils import dcos_api, enterprise, helpers
 import pytest
 import retrying
 import yaml
+from requests import HTTPError
 
 import upgrade
+from conftest import wait_for_dns, make_dcos_api_session
+from json_job_definitions import spark_consumer_job, spark_producer_job, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc
 
 log = logging.getLogger(__name__)
 
-TEST_APP_NAME_FMT = 'upgrade-{}'
-
-
-@pytest.fixture(scope='session')
-def viplisten_app():
-    service_name = TEST_APP_NAME_FMT.format('viplisten-' + uuid.uuid4().hex)
-
-    return {
-        "id": '/' + service_name,
-        "cmd": "python3 -m http.server $PORT0",
-        "container": {
-            "type": "MESOS",
-            "docker": {
-                "image": "library/python:3",
-            }
-        },
-        "cpus": 0.1,
-        "healthChecks": [
-            {
-                "portIndex": 0,
-                "protocol": "MESOS_HTTP",
-                "path": "/"
-            }
-        ],
-        "instances": 1,
-        "mem": 32,
-        "portDefinitions": [
-            {
-                "labels": {
-                    "VIP_0": "/viplisten:5000"
-                },
-                "name": "server",
-                "protocol": "tcp"
-            }
-        ]
-    }
-
-
-@pytest.fixture(scope='session')
-def viptalk_app():
-    return {
-        "id": '/' + TEST_APP_NAME_FMT.format('viptalk-' + uuid.uuid4().hex),
-        "cmd": "while true; do echo \"Sleeping...\"; sleep 5; echo -n \"Checking ...\"; /opt/mesosphere/bin/curl -s -o /dev/null -I -w \"%{http_code}\" http://viplisten.marathon.l4lb.thisdcos.directory:5000; echo \" ok\"; done",
-        "container": {
-            "type": "MESOS",
-            "volumes": [
-                {
-                    "containerPath": "/opt/mesosphere/bin",
-                    "hostPath": "/opt/mesosphere/bin",
-                    "mode": "RO"
-                }
-            ]
-        },
-        "healthChecks": [
-            {
-                "protocol": "COMMAND",
-                "command": {
-                    "value": "exit 0"
-                }
-            }
-        ],
-        "instances": 1,
-        "cpus": 0.1,
-        "mem": 32
-    }
-
-
-@pytest.fixture(scope='session')
-def healthcheck_app():
-    # HTTP healthcheck app to make sure tasks are reachable during the upgrade.
-    # If a task fails its healthcheck, Marathon will terminate it and we'll
-    # notice it was killed when we check tasks on exit.
-    return {
-        "id": '/' + TEST_APP_NAME_FMT.format('healthcheck-' + uuid.uuid4().hex),
-        "cmd": "python3 -m http.server 8080",
-        "cpus": 0.5,
-        "mem": 32.0,
-        "instances": 1,
-        "container": {
-            "type": "DOCKER",
-            "docker": {
-                "image": "python:3",
-                "network": "BRIDGE",
-                "portMappings": [
-                    {"containerPort": 8080, "hostPort": 0}
-                ]
-            }
-        },
-        "healthChecks": [
-            {
-                "protocol": "HTTP",
-                "path": "/",
-                "portIndex": 0,
-                "gracePeriodSeconds": 300,
-                "intervalSeconds": 60,
-                "timeoutSeconds": 20,
-                "maxConsecutiveFailures": 10
-            }
-        ],
-    }
-
-
-@pytest.fixture(scope='session')
-def dns_app(healthcheck_app):
-    # DNS resolution app to make sure DNS is available during the upgrade.
-    # Periodically resolves the healthcheck app's domain name and logs whether
-    # it succeeded to a file in the Mesos sandbox.
-    healthcheck_app_id = healthcheck_app['id'].lstrip('/')
-    return {
-        "id": '/' + TEST_APP_NAME_FMT.format('dns-' + uuid.uuid4().hex),
-        "cmd": """
-while true
-do
-    printf "%s " $(date --utc -Iseconds) >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
-    if host -W $TIMEOUT_SECONDS $RESOLVE_NAME
-    then
-        echo SUCCESS >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
-    else
-        echo FAILURE >> $MESOS_SANDBOX/$DNS_LOG_FILENAME
-    fi
-    sleep $INTERVAL_SECONDS
-done
-""",
-        "env": {
-            'RESOLVE_NAME': helpers.marathon_app_id_to_mesos_dns_subdomain(healthcheck_app_id) + '.marathon.mesos',
-            'DNS_LOG_FILENAME': 'dns_resolve_log.txt',
-            'INTERVAL_SECONDS': '1',
-            'TIMEOUT_SECONDS': '1',
-        },
-        "cpus": 0.5,
-        "mem": 32.0,
-        "instances": 1,
-        "container": {
-            "type": "DOCKER",
-            "docker": {
-                "image": "branden/bind-utils",
-                "network": "BRIDGE",
-            }
-        },
-        "dependencies": [healthcheck_app_id],
-    }
-
-
-@pytest.fixture(scope='session')
-def docker_pod():
-    return {
-        'id': '/' + TEST_APP_NAME_FMT.format('docker-pod-' + uuid.uuid4().hex),
-        'scaling': {'kind': 'fixed', 'instances': 1},
-        'environment': {'PING': 'PONG'},
-        'containers': [
-            {
-                'name': 'container1',
-                'resources': {'cpus': 0.1, 'mem': 32},
-                'image': {'kind': 'DOCKER', 'id': 'debian:jessie'},
-                'exec': {'command': {'shell': 'while true; do sleep 1; done'}},
-                'healthcheck': {'command': {'shell': 'sleep 1'}}
-            },
-            {
-                'name': 'container2',
-                'resources': {'cpus': 0.1, 'mem': 32},
-                'exec': {'command': {'shell': 'echo $PING > foo; while true; do sleep 1; done'}},
-                'healthcheck': {'command': {'shell': 'test $PING = `cat foo`'}}
-            }
-        ],
-        'networks': [{'mode': 'host'}]
-    }
-
-
-@pytest.fixture(scope='session')
-def onprem_cluster(launcher):
-    if launcher.config['provider'] != 'onprem':
-        pytest.skip('Only onprem provider is supported for upgrades!')
-    return launcher.get_onprem_cluster()
-
-
-@pytest.fixture(scope='session')
-def is_enterprise():
-    return os.getenv('TEST_UPGRADE_ENTERPRISE', 'false') == 'true'
-
-
-@pytest.fixture(scope='session')
-def dcos_api_session(onprem_cluster, launcher, is_enterprise):
-    """ The API session for the cluster at the beginning of the upgrade
-    This will be used to start tasks and poll the metrics snapshot endpoint
-    """
-    return make_dcos_api_session(
-        onprem_cluster, launcher, is_enterprise, launcher.config['dcos_config'].get('security'))
-
-
-def make_dcos_api_session(onprem_cluster, launcher, is_enterprise: bool = False, security_mode=None):
-    ssl_enabled = security_mode in ('strict', 'permissive')
-    args = {
-        'dcos_url': 'http://' + onprem_cluster.masters[0].public_ip,
-        'masters': [m.public_ip for m in onprem_cluster.masters],
-        'slaves': [m.public_ip for m in onprem_cluster.private_agents],
-        'public_slaves': [m.public_ip for m in onprem_cluster.public_agents],
-        'auth_user': dcos_api.DcosUser(helpers.CI_CREDENTIALS),
-        'exhibitor_admin_password': launcher.config['dcos_config'].get('exhibitor_admin_password')}
-
-    if is_enterprise:
-        api_class = enterprise.EnterpriseApiSession
-        args['auth_user'] = enterprise.EnterpriseUser(
-            os.getenv('DCOS_LOGIN_UNAME', 'bootstrapuser'),
-            os.getenv('DCOS_LOGIN_PW', 'deleteme'))
-        if ssl_enabled:
-            args['dcos_url'] = args['dcos_url'].replace('http', 'https')
-    else:
-        api_class = dcos_api.DcosApiSession
-
-    return api_class(**args)
-
-
-@retrying.retry(
-    wait_fixed=(1 * 1000),
-    stop_max_delay=(120 * 1000),
-    retry_on_result=lambda x: not x)
-def wait_for_dns(dcos_api_session, hostname):
-    """Return True if Mesos-DNS has at least one entry for hostname."""
-    hosts = dcos_api_session.get('/mesos_dns/v1/hosts/' + hostname).json()
-    return any(h['host'] != '' and h['ip'] != '' for h in hosts)
 
 
 def get_master_task_state(dcos_api_session, task_id):
@@ -304,25 +89,117 @@ def use_pods():
     return os.getenv('TEST_UPGRADE_USE_PODS', 'true') == 'true'
 
 
-@pytest.fixture(scope='session')
-def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app, dns_app, docker_pod, use_pods):
-    set_ca_cert_for_session(dcos_api_session)
+def wait_for_frameworks_to_deploy(dcoscli):
+    """Waits for cassandra and kafka to finish deploying"""
+    wait_for_individual_framework_to_deploy(dcoscli, "dcos cassandra plan status deploy --json")
+    wait_for_individual_framework_to_deploy(dcoscli, "dcos cassandra plan status recovery --json")
+    wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status deploy --json")
+    wait_for_individual_framework_to_deploy(dcoscli, "dcos kafka plan status recovery --json")
 
-    dcos_api_session.wait_for_dcos()
+
+@retrying.retry(wait_fixed=5000, stop_max_delay=600000)
+def wait_for_individual_framework_to_deploy(dcoscli, cli_commands):
+    """Takes a cli command to run, and waits for the json attribute 'status' to be 'COMPLETE'"""
+    cassandra_deploy_json_return_string = json.loads(dcoscli.exec_command(cli_commands.split())[0])
+    log.info("Waiting for '" + str(cli_commands).strip() + "' to complete deploying")
+    str(cassandra_deploy_json_return_string["status"]) == str("COMPLETE")
+
+
+@retrying.retry(wait_fixed=5000, stop_max_delay=300000)
+def wait_for_spark_job_to_deploy(dcoscli, run_command_response):
+    """Takes a spark status name to run, and waits for the response to contain the 'state' of 'TASK RUNNING'"""
+    driver_name = str(run_command_response[0])[str(run_command_response[0]).index('driver-'):]
+    status_command_response = dcoscli.exec_command(("dcos spark status " + driver_name).split())
+    log.info("Waiting for '" + str(driver_name).strip() + "' to complete deploying")
+    assert(''.join(status_command_response).find("state: TASK_RUNNING") != -1)
+
+
+@retrying.retry(wait_fixed=5000, stop_max_delay=300000)
+def wait_for_kafka_topic_to_start(dcoscli):
+    """Takes a kafka topic, and waits for the topic to appear in kafka's topic list"""
+    kafka_topic_list = str(dcoscli.exec_command("dcos kafka topic list".split()))
+    log.info("Waiting for the kafka topic 'mytopicC' to complete deploying")
+    assert(kafka_topic_list.find("mytopicC") != -1)
+
+
+@retrying.retry(wait_fixed=5000, stop_max_delay=300000)
+def wait_for_kafka_topic_to_start_counting(dcoscli):
+    """waits for the kafka topic started by our spark jobs to begin counting words"""
+    kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+    log.info("Waiting for the kafka topic 'mytopicC' to begin counting words")
+    assert(str(kafka_job_words) != "0")
+
+
+def start_marathonlb_apps(superuser_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
+    app_defs = [docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc]
+    app_ids = []
+
+    for app_def in app_defs:
+        app_id = app_def['id']
+        app_ids.append(app_id)
+
+        app_name = app_id[1:] if app_id[0] == '/' else app_id
+        log.info('{} is being tested.'.format(app_name))
+
+        try:
+            superuser_api_session.marathon.deploy_app(app_def)
+            superuser_api_session.marathon.wait_for_deployments_complete
+        except AssertionError:
+            log.info('Install of ' + app_id + ' failed, retrying the install...')
+            superuser_api_session.marathon.destroy_app(app_id)
+
+            superuser_api_session.marathon.deploy_app(app_def)
+            superuser_api_session.marathon.wait_for_deployments_complete
+
+    return app_ids
+
+
+def start_spark_jobs(dcoscli, spark_producer_job, spark_consumer_job):
+    try:
+        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job)
+        wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
+    except AssertionError:
+        log.info('Initialization of spark producer job failed, retrying the run...')
+        driver_name = str(spark_producer_response[0])[str(spark_producer_response[0]).index('driver-'):]
+        dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
+        spark_producer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_producer_job)
+        wait_for_spark_job_to_deploy(dcoscli, spark_producer_response)
+
+    try:
+        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job)
+        wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
+    except AssertionError:
+        log.info('Initialization of spark consumer job failed, retrying the run...')
+        driver_name = str(spark_consumer_response[0])[str(spark_consumer_response[0]).index('driver-'):]
+        dcoscli.exec_command_as_shell("dcos spark kill " + driver_name)
+        spark_consumer_response = dcoscli.exec_command_as_shell("dcos spark run --submit-args=" + spark_consumer_job)
+        wait_for_spark_job_to_deploy(dcoscli, spark_consumer_response)
+
+
+def start_marathon_apps(dcos_api_session, viplisten_app, viptalk_app, healthcheck_app, dns_app, docker_pod, use_pods):
     # TODO(branden): We ought to be able to deploy these apps concurrently. See
     # https://mesosphere.atlassian.net/browse/DCOS-13360.
+    log.info("Launching viplisten_app")
     dcos_api_session.marathon.deploy_app(viplisten_app)
     dcos_api_session.marathon.wait_for_deployments_complete()
     # viptalk app depends on VIP from viplisten app, which may still fail
     # the first try immediately after wait_for_deployments_complete
     dcos_api_session.marathon.deploy_app(viptalk_app, ignore_failed_tasks=True)
+    log.info("Launching viptalk_app")
     dcos_api_session.marathon.wait_for_deployments_complete()
 
+    log.info("Launching healthcheck_app")
     dcos_api_session.marathon.deploy_app(healthcheck_app)
     dcos_api_session.marathon.wait_for_deployments_complete()
+
+    log.info("dns_app: '" + str(dns_app) + "'")
+    log.info("resolve name: '" + str(dns_app['env']['RESOLVE_NAME']) + "'")
+
     # This is a hack to make sure we don't deploy dns_app before the name it's
     # trying to resolve is available.
+    log.info("Waiting for healthsheck app to launch to launch dns_app...")
     wait_for_dns(dcos_api_session, dns_app['env']['RESOLVE_NAME'])
+    log.info("Launching dns_app")
     dcos_api_session.marathon.deploy_app(dns_app, check_health=False)
     dcos_api_session.marathon.wait_for_deployments_complete()
 
@@ -333,6 +210,7 @@ def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app
     test_pods = list()
     test_pod_ids = list()
     if use_pods:
+        log.info("Launching docker_pod")
         dcos_api_session.marathon.deploy_pod(docker_pod)
         dcos_api_session.marathon.wait_for_deployments_complete()
         test_pods = [docker_pod]
@@ -348,12 +226,94 @@ def setup_workload(dcos_api_session, viptalk_app, viplisten_app, healthcheck_app
     for app in test_apps:
         assert app['instances'] == len(tasks_start[app['id']])
 
+    return test_app_ids, test_pod_ids, tasks_start
+
+
+def init_main_frameworks(dcos_api_session, dcoscli):
+    # Dictionary containing installed framework-ids.
+    framework_ids = {}
+
+    # Add essential services for basic run test
+    services = {
+        'cassandra': {'version': os.environ.get('CASSANDRA_VERSION'), 'option': None},
+        'kafka': {'version': os.environ.get('KAFKA_VERSION'), 'option': None},
+        'spark': {'version': os.environ.get('SPARK_VERSION'), 'option': {'service': {'use_bootstrap_for_IP_detect': True, 'user': 'root'}}},
+        'marathon-lb': {'version': os.environ.get('MARATHON-LB_VERSION'), 'option': None}
+    }
+
+    @retrying.retry(wait_fixed=5000, stop_max_delay=40000)
+    def install_framework(api_session, framework_package, framework_config):
+        log.info("Installing {0} {1} with options: {2}".format(framework_package, framework_config['version'] or "(most recent version)", framework_config['option'] or '(none)'))
+        try:
+            installed_package = api_session.cosmos.install_package(framework_package, framework_config['version'], framework_config['option'])
+        except HTTPError as error:
+            log.info("Caught error: '{0}'".format(str(error)))
+            if "409" in str(error):
+                #log.info("Package is already installed.  Dumping cosmos info and returning generic package name: " + api_session.cosmos.list_packages())
+                return "/{0}".format(framework_package)
+            else:
+                raise error
+
+        return installed_package.json()['appId']
+
+    # Installing the frameworks
+    for package, config in services.items():
+        framework_ids[package] = install_framework(dcos_api_session, package, config)
+
+    # Waiting for deployments to complete.
+    dcos_api_session.marathon.wait_for_deployments_complete()
+    for package in framework_ids.keys():
+        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
+    log.info("Completed installing required services.")
+
+    # Install the various CLIs for our frameworks
+    dcoscli.exec_command("dcos package install cassandra --cli --yes".split())
+    dcoscli.exec_command("dcos package install kafka --cli --yes".split())
+    dcoscli.exec_command("dcos package install spark --cli --yes".split())
+
+    return framework_ids
+
+
+@pytest.fixture(scope='session')
+def setup_workload(dcos_api_session, dcoscli, viplisten_app, viptalk_app, healthcheck_app, dns_app, docker_pod, use_pods, spark_producer_job, spark_consumer_job, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc):
+    set_ca_cert_for_session(dcos_api_session)
+
+    dcos_api_session.wait_for_dcos()
+
+    # Installing dcos-enterprise-cli to start our frameworks, and install various jobs.
+    dcos_api_session.cosmos.install_package('dcos-enterprise-cli', None, None)
+
+    framework_ids = init_main_frameworks(dcos_api_session, dcoscli)
+
+    wait_for_frameworks_to_deploy(dcoscli)
+
+    # Run our two spark jobs to exercise all three of our frameworks
+    start_spark_jobs(dcoscli, spark_producer_job, spark_consumer_job)
+
+    # Checking whether applications are running without errors.
+    for package in framework_ids.keys():
+        assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, False) is True
+
+    # Wait for the kafka topic to show up in kafka's topic list,
+    # and then wait for the topic to begin producing the word count
+    wait_for_kafka_topic_to_start(dcoscli)
+    wait_for_kafka_topic_to_start_counting(dcoscli)
+
+    # Preserve the current quantity of words from the Kafka job so we can compare it later
+    kafka_job_words = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+
+    # Start apps that rely on marathon-lb
+    marathon_app_ids = start_marathonlb_apps(dcos_api_session, docker_bridge, docker_host, docker_ippc, ucr_bridge, ucr_hort, ucr_ippc)
+
+    # Start the marathon apps
+    test_app_ids, test_pod_ids, tasks_start = start_marathon_apps(dcos_api_session, viplisten_app, viptalk_app, healthcheck_app, dns_app, docker_pod, use_pods)
+
     # Save the master's state of the task to compare with
     # the master's view after the upgrade.
     # See this issue for why we check for a difference:
     # https://issues.apache.org/jira/browse/MESOS-1718
     task_state_start = get_master_task_state(dcos_api_session, tasks_start[test_app_ids[0]][0])
-    return test_app_ids, test_pod_ids, tasks_start, task_state_start
+    return test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids
 
 
 @pytest.fixture(scope='session')
@@ -365,6 +325,8 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
     bootstrap_host = onprem_cluster.bootstrap_host.public_ip
     bootstrap_ssh_client = launcher.get_bootstrap_ssh_client()
     upgrade.reset_bootstrap_host(bootstrap_ssh_client, bootstrap_host)
+
+    log.info("ssh key: '" + bootstrap_ssh_client.key + "'")
 
     upgrade_config_overrides = dict()
     if 'TEST_UPGRADE_CONFIG_PATH' in os.environ:
@@ -419,8 +381,20 @@ def upgraded_dcos(dcos_api_session, launcher, setup_workload, onprem_cluster, is
 
 
 class TestUpgrade:
-    def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload):
-        test_app_ids, test_pod_ids, tasks_start, _ = setup_workload
+    def test_marathon_tasks_survive(self, upgraded_dcos, use_pods, setup_workload, dcos_api_session):
+        """
+        This test is to verify that certain jobs that we started prior to upgrading have continued to function through
+        the upgrade
+        :param upgraded_dcos: the upgraded instance of DCOS
+        :param use_pods: boolean to determine if we're using docker pods or not
+        :param setup_workload: the return from our setup of the workload prior to upgrading
+        :param dcos_api_session: the api session connected to our instance of dcos
+        """
+
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
+
+        for test_app in test_app_ids:
+            dcos_api_session.marathon.wait_for_app_deployment(test_app, 1, False, True, 300)
         app_tasks_end = {app_id: sorted(app_task_ids(upgraded_dcos, app_id)) for app_id in test_app_ids}
         tasks_end = {**app_tasks_end}
         if use_pods:
@@ -446,7 +420,7 @@ class TestUpgrade:
             else:
                 return subset == superset
 
-        test_app_ids, test_pod_ids, tasks_start, task_state_start = setup_workload
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, *_ = setup_workload
         task_state_end = get_master_task_state(upgraded_dcos, tasks_start[test_app_ids[0]][0])
         assert is_contained(task_state_start, task_state_end), '{}\n\n{}'.format(task_state_start, task_state_end)
 
@@ -463,3 +437,43 @@ class TestUpgrade:
                                               'Hostname failed to resolve at these times:\n{failures}'.format(
             hostname=dns_app['env']['RESOLVE_NAME'],
             failures='\n'.join(dns_failure_times))
+
+    def test_cassandra_tasks_survive(self, upgraded_dcos, dcos_api_session, setup_workload, dcoscli):
+        """
+        This test is to confirm that a combined job utilizing kafka, cassandra, and spark has conitnued to function
+        through the upgrade
+        :param upgraded_dcos: the upgraded instance of DCOS
+        :param dcos_api_session: the api session connected to our instance of dcos
+        :param setup_workload: the return from our setup of the workload prior to upgrading
+        :param dcoscli: the api session connected to our instance of dcos
+        """
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
+
+        dcos_api_session.marathon.wait_for_deployments_complete()
+
+        # Checking whether applications are running without errors.
+        for package in framework_ids.keys():
+            assert dcos_api_session.marathon.check_app_instances(framework_ids[package], 1, True, True) is True
+
+        # Get a new word count from kafka to compare to the word count from before the upgrade
+        kafka_job_words_post_upgrade = json.loads(dcoscli.exec_command("dcos kafka topic offsets mytopicC".split())[0])[0]["0"]
+
+        assert int(kafka_job_words_post_upgrade) > int(kafka_job_words)
+
+    def test_marathonlb_apps_survived(self, upgraded_dcos, dcos_api_session, setup_workload):
+        """
+        This test is to confirm that certain jobs that utilize marathon-lb have continued to function through the
+        upgrade
+        :param upgraded_dcos: the upgraded instance of DCOS
+        :param dcos_api_session: the api session connected to our instance of dcos
+        :param setup_workload: the return from our setup of the workload prior to upgrading
+        """
+        test_app_ids, test_pod_ids, tasks_start, task_state_start, kafka_job_words, framework_ids, marathon_app_ids = setup_workload
+
+        log.info("Every marathon instance we attempted to run: '" + str(marathon_app_ids) + "'")
+
+        for marathon_app in marathon_app_ids:
+            log.info("Testing for maintained running of: " + marathon_app)
+
+            dcos_api_session.marathon.wait_for_app_deployment(marathon_app, 4, True, True, 300)
+            assert dcos_api_session.marathon.check_app_instances(marathon_app, 4, True, True)

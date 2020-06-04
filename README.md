@@ -1,4 +1,4 @@
-<a href="https://teamcity.mesosphere.io/viewType.html?buildTypeId=DcOs_Enterprise_Test_UpgradeTest_WipFromEarlierStableMinorVersion&guest=1"><img src="https://teamcity.mesosphere.io/app/rest/builds/buildType:(id:DcOs_Enterprise_Test_UpgradeTest_WipFromEarlierStableMinorVersion)/statusIcon"/></a>
+[![build status](https://teamcity.mesosphere.io/app/rest/builds/buildType:(id:DcOs_Enterprise_Test_UpgradeTest_WipFromEarlierStableMinorVersion)/statusIcon)](https://teamcity.mesosphere.io/viewType.html?buildTypeId=DcOs_Enterprise_Test_UpgradeTest_WipFromEarlierStableMinorVersion&guest=1)
 # advanced-tests (OS Upgrade Testing)
 This repo is used for automated DC/OS upgrade testing.
 
